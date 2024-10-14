@@ -3,13 +3,14 @@
 #include <cstddef>
 #include <iterator>
 
-#define LATENCY 300
-
-template<class T, bool R> class Data {
-private:
-    T& data;
-
+//Primitive data type wrappers for gim latency
+template<class T, bool R,int LATENCY> class GIM_data {
 public:
-    Data& operator=(const Data<T, true>& a);
-    Data& operator=(const Data<T, false>& a);
+     T data;
+    GIM_data(T data);
+    ~GIM_data(){};//memory free by GIM_array->GIM_mem
+    GIM_data& operator=(const GIM_data<T, R,LATENCY>& a);
+    GIM_data& operator=(T a);
+
+
 };

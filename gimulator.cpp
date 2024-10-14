@@ -165,8 +165,9 @@ public:
   }
   void store(int offset, Type type, int value) {
     inject_cycle(type);
-    __m128i v = _mm_stream_si32((index + offset), value);
-    __sync_synchronize();
+     volatile char *ptr = (char *)((unsigned long)addr & ~(CACHE_LINE_SIZE - 1));
+    asm volatile("clflush %0" : "+m"(*(volatile char *)ptr));
+    asm volatile("mfence" ::: "memory");
   }
 };
 

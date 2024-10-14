@@ -2,16 +2,16 @@
 #include "utills.hpp"
 #include <cstddef>
 #include <iterator>
+#include <smmintrin.h>
 
-#define LATENCY 300
-
-template<class T, bool R> class GIM_array {
+template<class T, bool R , int LATENCY> class GIM_array {
 private:
     size_t capacity;
     size_t size;
     T* data;
     int host_id;
     CXL_SHM* cxl_shm;
+    
 
 public:
     GIM_array(size_t size, const CXL_SHM* cxl_shm);
