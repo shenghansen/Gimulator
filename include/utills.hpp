@@ -10,7 +10,7 @@
 
 // MEMINFO
 #include <stdio.h>
-void show_meminfo() {
+void dump_memory_maps() {
     printf("Dump /proc/self/maps\n");
     int maps_fd = open("/proc/self/maps", O_RDONLY);
     if (maps_fd == -1) {
@@ -37,7 +37,20 @@ void show_meminfo() {
     close(maps_fd);
 }
 
+// inject latency
+#include <emmintrin.h>
+#include <immintrin.h>
+#include <x86intrin.h>
+constexpr static double cycle_per_ns = 2.4;   // change by your cpu
+template<int inject_ns> inline uint64_t inject_latency_ns() {
+    constexpr uint64_t inject_cycle_num = inject_ns * cycle_per_ns;
+    uint64_t start_c_, end_c_, temp_c_;
 
+    start_c_ = _rdtsc();
+    temp_c_ = start_c_ + inject_cycle_num;
+    while ((end_c_ = _rdtsc()) < temp_c_) _mm_pause();
+    return end_c_ - start_c_;
+}
 
 
 

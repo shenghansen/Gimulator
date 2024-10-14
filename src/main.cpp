@@ -1,4 +1,4 @@
-#include "include/DMA.hpp"
+#include "DMA.hpp"
 #include <iostream>
 
 int main(int argc, char** argv) {

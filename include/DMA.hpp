@@ -5,7 +5,7 @@
  * @Last Modified time: 2024-10-11 16:08:14
  */
 #include "dml/dml.h"
-#include "utills.h"
+#include "utills.hpp"
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -19,6 +19,7 @@ using namespace std::chrono;
 
 // TODO: Beter Strategy
 #define BATCH_SIZE 8u
+#define
 #define MAX_TRANSFER_SIZE 268435456u
 #define MAX_DMA_SIZE BATCH_SIZE* MAX_TRANSFER_SIZE
 
