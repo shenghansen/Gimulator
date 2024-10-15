@@ -52,7 +52,7 @@ template<int inject_ns> inline uint64_t inject_latency_ns() {
     return end_c_ - start_c_;
 }
 
-
+#define INLINE __attribute__((always_inline)) inline
 
 
 #endif
