@@ -4,12 +4,13 @@
  * @Last Modified by: Hansen Sheng
  * @Last Modified time: 2024-10-11 16:08:14
  */
-#include "dml/dml.h"
 #include "utills.hpp"
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <dml/dml.h>
+// #include <dml/dml.hpp>
 #include <omp.h>
 #include <stdlib.h>
 #include <sys/mman.h>
@@ -19,7 +20,6 @@ using namespace std::chrono;
 
 // TODO: Beter Strategy
 #define BATCH_SIZE 8u
-#define
 #define MAX_TRANSFER_SIZE 268435456u
 #define MAX_DMA_SIZE BATCH_SIZE* MAX_TRANSFER_SIZE
 
@@ -27,6 +27,11 @@ int _batch_memcpy(uint8_t* source, uint8_t* destination, size_t size, u_int32_t 
 #ifdef STATISTICS
     auto start = system_clock::now();
 #endif
+    // std::vector<uint8_t> source_v(source, source + size);
+    // std::vector<uint8_t> destination_v(destination, destination + size);
+    // dml::execute<dml::hardware>(
+    //     dml::mem_move, dml::make_view(source_v), dml::make_view(destination_v), numa);
+
     // batch prepare
     dml_path_t execution_path = DML_PATH_HW;
     dml_job_t* dml_job_ptr = NULL;
@@ -120,18 +125,6 @@ int DMA_memcpy(uint8_t* source, uint8_t* destination, size_t size, u_int32_t num
 #ifdef STATISTICS
     auto start = system_clock::now();
 #endif
-    if (mlock(source, size) != 0) {
-        ERROR("Failed to lock source memory!");
-        return 1;
-    }
-    if (mlock(destination, size) != 0) {
-        ERROR("Failed to lock destination memory!");
-        return 1;
-    }
-    auto aaa = system_clock::now();
-    auto ddd = duration_cast<microseconds>(aaa - start);
-    INFO("mlock time: {} s",
-         (double(ddd.count()) * microseconds::period::num / microseconds::period::den));
     size_t remaining_size = size;
     size_t offset = 0;
     int result;
@@ -158,12 +151,12 @@ int DMA_memcpy(uint8_t* source, uint8_t* destination, size_t size, u_int32_t num
 
     INFO("DMA bandwidth: {} GB/s", bandwidth);
 #endif
-    // TODO: unlock?
     return 0;
 }
 
 int _batch_memcpy_asynchronous(uint8_t* source, uint8_t* destination, size_t size, u_int32_t numa,
                                dml_job_t* dml_job_ptr) {
+
     // batch prepare
     dml_path_t execution_path = DML_PATH_HW;
     // dml_job_t* dml_job_ptr = NULL;
@@ -230,9 +223,9 @@ int _batch_memcpy_asynchronous(uint8_t* source, uint8_t* destination, size_t siz
 int _batch_memcpy_asynchronous_check(dml_job_t* dml_job_ptr) {
     dml_status_t status = dml_check_job(dml_job_ptr);
     switch (status) {
-    case 0: printf("DML_STATUS_OK.\n"); break;
-    case 2: printf("DML_STATUS_BEING_PROCESSED.\n"); break;
-    case 23: printf("DML_STATUS_JOB_CORRUPTED.\n"); return 1;
+    case 0: INFO("DML_STATUS_OK."); break;
+    case 2: INFO("DML_STATUS_BEING_PROCESSED."); break;
+    case 23: INFO("DML_STATUS_JOB_CORRUPTED."); return 1;
     }
     return 0;
 }
@@ -262,18 +255,6 @@ int DMA_memcpy_asynchronous(uint8_t* source, uint8_t* destination, size_t size, 
 #ifdef STATISTICS
     auto start = system_clock::now();
 #endif
-    if (mlock(source, size) != 0) {
-        ERROR("Failed to lock source memory!");
-        return 1;
-    }
-    if (mlock(destination, size) != 0) {
-        ERROR("Failed to lock destination memory!");
-        return 1;
-    }
-    auto aaa = system_clock::now();
-    auto ddd = duration_cast<microseconds>(aaa - start);
-    INFO("mlock time: {} s",
-         (double(ddd.count()) * microseconds::period::num / microseconds::period::den));
     size_t remaining_size = size;
     size_t offset = 0;
     int result;
@@ -306,6 +287,5 @@ int DMA_memcpy_asynchronous(uint8_t* source, uint8_t* destination, size_t size, 
 
     INFO("DMA bandwidth: {} GB/s", bandwidth);
 #endif
-    // TODO: unlock?
     return 0;
 }

@@ -16,15 +16,15 @@ CXL_SHM::CXL_SHM(int num_hosts, int host_id,size_t cxl_shm_size, size_t gim_size
     GIM_mem = new uint8_t*[num_hosts];
     this->num_hosts = num_hosts;
     this->host_id = host_id;
+    this->shmid = new int[num_hosts + 1];
     //gim_mem init
     for (int i = 0; i < num_hosts; i++) {
-        int shmid;
-        shmid = shmget((key_t)i + 1, GIM_SIZE, 0666 | IPC_CREAT);
-        if (shmid == -1) {
+        shmid[i] = shmget((key_t)i + 1, GIM_SIZE, 0666 | IPC_CREAT);
+        if (shmid[i] == -1) {
             fprintf(stderr, "shmat failed\n");
             exit(EXIT_FAILURE);
         }
-        void* result = shmat(shmid, NULL, 0);
+        void* result = shmat(shmid[i], NULL, 0);
 
         if (result == (void*)-1) {
             fprintf(stderr, "shmat failed\n");
@@ -43,13 +43,12 @@ CXL_SHM::CXL_SHM(int num_hosts, int host_id,size_t cxl_shm_size, size_t gim_size
         printf("mbind success\n");
     }
     //cxl_shm_mem init
-    int shmid;
-    shmid = shmget((key_t)256, cxl_shm_size, 0666 | IPC_CREAT);
-    if (shmid == -1) {
+    shmid[num_hosts] = shmget((key_t)256, cxl_shm_size, 0666 | IPC_CREAT);
+    if (shmid[num_hosts] == -1) {
         fprintf(stderr, "shmat failed\n");
         exit(EXIT_FAILURE);
     }
-    void* result = shmat(shmid, NULL, 0);
+    void* result = shmat(shmid[num_hosts], NULL, 0);
 
     if (result == (void*)-1) {
         fprintf(stderr, "shmat failed\n");
@@ -71,6 +70,14 @@ CXL_SHM::CXL_SHM(int num_hosts, int host_id,size_t cxl_shm_size, size_t gim_size
 CXL_SHM::~CXL_SHM() {
     for (int i = 0; i < num_hosts; i++) {
         shmdt(GIM_mem[i]);
+    }
+    if (host_id == 0) {
+        for (int i = 0; i < num_hosts + 1; i++) {
+            if (shmctl(shmid[i], IPC_RMID, 0) == -1) {
+                printf("shmctl(IPC_RMID) failed\n");
+                exit(EXIT_FAILURE);
+            }
+        }
     }
     delete[] GIM_mem;
 }
