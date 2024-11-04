@@ -52,6 +52,8 @@ int _batch_memcpy(uint8_t* source, uint8_t* destination, size_t size, u_int32_t 
     status = dml_get_batch_size(dml_job_ptr, BATCH_SIZE, &batch_buffer_length);
     if (DML_STATUS_OK != status) {
         ERROR("An error {} occurred during getting batch size.", static_cast<int>(status));
+        dml_finalize_job(dml_job_ptr);
+        free(dml_job_ptr);
         return 1;
     }
     uint8_t* batch_buffer_ptr = (uint8_t*)malloc(batch_buffer_length);
@@ -73,6 +75,8 @@ int _batch_memcpy(uint8_t* source, uint8_t* destination, size_t size, u_int32_t 
         if (DML_STATUS_OK != status) {
             ERROR("An error {} occurred during setting of batch operation.",
                   static_cast<int>(status));
+            dml_finalize_job(dml_job_ptr);
+            free(dml_job_ptr);
             return 1;
         }
     }
@@ -84,16 +88,22 @@ int _batch_memcpy(uint8_t* source, uint8_t* destination, size_t size, u_int32_t 
                                              DML_FLAG_PREFETCH_CACHE);
     if (DML_STATUS_OK != status) {
         ERROR("An error {} occurred during setting of batch operation.", static_cast<int>(status));
+        dml_finalize_job(dml_job_ptr);
+        free(dml_job_ptr);
         return 1;
     }
     // execute
     status = dml_execute_job(dml_job_ptr, DML_WAIT_MODE_BUSY_POLL);
     if (DML_STATUS_OK != status) {
         ERROR("An error {} occurred during job execution.", static_cast<int>(status));
+        dml_finalize_job(dml_job_ptr);
+        free(dml_job_ptr);
         return 1;
     }
     if (dml_job_ptr->result != 0) {
         ERROR("Operation result is incorrect.");
+        dml_finalize_job(dml_job_ptr);
+        free(dml_job_ptr);
         return 1;
     }
 

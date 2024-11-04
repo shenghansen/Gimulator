@@ -67,7 +67,7 @@ public:
         asm volatile("mfence" ::: "memory");
     }
 
-    static inline void clflush(const void* data, int len) {
+    static INLINE void clflush(const void* data, int len) {
         volatile char* ptr = (char*)((unsigned long)data & ~(CACHE_LINE_SIZE - 1));
         for (; ptr < (char*)data + len; ptr += CACHE_LINE_SIZE) {
             asm volatile("clflush %0" : "+m"(*(volatile char*)ptr));
