@@ -19,7 +19,7 @@ int main(int argc, char** argv) {
     for (size_t i = 0; i < size; i++) {
         source[i] = i % 256;
     }
-    // DMA_memcpy(source, destination, size, 1);
-    hl_DMA_memcpy(source, destination, size);
+    DMA_memcpy(source, destination, size, 1);
+    // hl_DMA_memcpy(source, destination, size);
     // hl_DMA_memcpy_asynchronous(source, destination, size);
 }
