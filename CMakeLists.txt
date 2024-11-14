@@ -7,7 +7,6 @@ find_package(OpenMP REQUIRED)
 find_package(DML REQUIRED)
 set(CMAKE_CXX_STANDARD 17)
 
-
 add_definitions(-DSTATISTICS)
 
 set(CMAKE_CXX_FLAGS "-march=native  ${CMAKE_CXX_FLAGS}")
