@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD 17)
 
 add_definitions(-DSTATISTICS)
 
-set(CMAKE_CXX_FLAGS "-march=native  ${CMAKE_CXX_FLAGS}")
+set(CMAKE_CXX_FLAGS "-march=native -g  ${CMAKE_CXX_FLAGS}")
 include_directories(include)
 add_executable(demo ${CMAKE_SOURCE_DIR}/src/main.cpp)
 target_link_libraries(demo numa dml dmlhl OpenMP::OpenMP_CXX)

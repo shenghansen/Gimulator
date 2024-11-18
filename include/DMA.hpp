@@ -16,6 +16,7 @@
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <vector>
 using namespace std::chrono;
 
 // TODO: Beter Strategy
@@ -155,7 +156,7 @@ int DMA_memcpy(uint8_t* source, uint8_t* destination, size_t size, u_int32_t num
 }
 
 int _batch_memcpy_asynchronous(uint8_t* source, uint8_t* destination, size_t size, u_int32_t numa,
-                               dml_job_t* dml_job_ptr) {
+                               dml_job_t** dml_job_ptr) {
 
     // batch prepare
     dml_path_t execution_path = DML_PATH_HW;
@@ -166,30 +167,30 @@ int _batch_memcpy_asynchronous(uint8_t* source, uint8_t* destination, size_t siz
         ERROR("An error {} occurred during getting job size.", static_cast<int>(status));
         return 1;
     }
-    dml_job_ptr = (dml_job_t*)malloc(job_size);
-    status = dml_init_job(execution_path, dml_job_ptr);
+    *dml_job_ptr = (dml_job_t*)malloc(job_size);
+    status = dml_init_job(execution_path, *dml_job_ptr);
     if (DML_STATUS_OK != status) {
         ERROR("An error {} occurred during job initialization.", static_cast<int>(status));
-        free(dml_job_ptr);
+        free(*dml_job_ptr);
         return 1;
     }
     uint32_t batch_buffer_length = 0u;
-    status = dml_get_batch_size(dml_job_ptr, BATCH_SIZE, &batch_buffer_length);
+    status = dml_get_batch_size(*dml_job_ptr, BATCH_SIZE, &batch_buffer_length);
     if (DML_STATUS_OK != status) {
         ERROR("An error {} occurred during getting batch size.", static_cast<int>(status));
         return 1;
     }
     uint8_t* batch_buffer_ptr = (uint8_t*)malloc(batch_buffer_length);
-    dml_job_ptr->operation = DML_OP_BATCH;
-    dml_job_ptr->destination_first_ptr = batch_buffer_ptr;
-    dml_job_ptr->destination_length = batch_buffer_length;
-    dml_job_ptr->numa_id = numa;
+    (*dml_job_ptr)->operation = DML_OP_BATCH;
+    (*dml_job_ptr)->destination_first_ptr = batch_buffer_ptr;
+    (*dml_job_ptr)->destination_length = batch_buffer_length;
+    (*dml_job_ptr)->numa_id = numa;
 
     // begin batch set
     size_t buffer_size = size / BATCH_SIZE;
     size_t remainder = size % BATCH_SIZE;
     for (size_t i = 0; i < BATCH_SIZE - 1; i++) {
-        status = dml_batch_set_mem_move_by_index(dml_job_ptr,
+        status = dml_batch_set_mem_move_by_index(*dml_job_ptr,
                                                  i,
                                                  source + i * buffer_size,
                                                  destination + i * buffer_size,
@@ -201,7 +202,7 @@ int _batch_memcpy_asynchronous(uint8_t* source, uint8_t* destination, size_t siz
             return 1;
         }
     }
-    status = dml_batch_set_mem_move_by_index(dml_job_ptr,
+    status = dml_batch_set_mem_move_by_index(*dml_job_ptr,
                                              BATCH_SIZE - 1,
                                              source + (BATCH_SIZE - 1) * buffer_size,
                                              destination + (BATCH_SIZE - 1) * buffer_size,
@@ -212,7 +213,7 @@ int _batch_memcpy_asynchronous(uint8_t* source, uint8_t* destination, size_t siz
         return 1;
     }
     // execute
-    status = dml_submit_job(dml_job_ptr);
+    status = dml_submit_job(*dml_job_ptr);
     if (DML_STATUS_OK != status) {
         ERROR("An error {} occurred during job submit.", static_cast<int>(status));
         return 1;
@@ -220,8 +221,8 @@ int _batch_memcpy_asynchronous(uint8_t* source, uint8_t* destination, size_t siz
     return 0;
 }
 
-int _batch_memcpy_asynchronous_check(dml_job_t* dml_job_ptr) {
-    dml_status_t status = dml_check_job(dml_job_ptr);
+int _batch_memcpy_asynchronous_check(dml_job_t** dml_job_ptr) {
+    dml_status_t status = dml_check_job(*dml_job_ptr);
     switch (status) {
     case 0: INFO("DML_STATUS_OK."); break;
     case 2: INFO("DML_STATUS_BEING_PROCESSED."); break;
@@ -230,23 +231,23 @@ int _batch_memcpy_asynchronous_check(dml_job_t* dml_job_ptr) {
     return 0;
 }
 
-int _batch_memcpy_asynchronous_wait(dml_job_t* dml_job_ptr) {
-    dml_status_t status = dml_wait_job(dml_job_ptr, DML_WAIT_MODE_UMWAIT);
+int _batch_memcpy_asynchronous_wait(dml_job_t** dml_job_ptr) {
+    dml_status_t status = dml_wait_job(*dml_job_ptr, DML_WAIT_MODE_UMWAIT);
     if (DML_STATUS_OK != status) {
         ERROR("An error {} occurred during job waiting.", static_cast<int>(status));
         return 1;
     }
-    if (dml_job_ptr->result != 0) {
+    if ((*dml_job_ptr)->result != 0) {
         ERROR("Operation result is incorrect.");
         return 1;
     }
-    status = dml_finalize_job(dml_job_ptr);
+    status = dml_finalize_job(*dml_job_ptr);
     if (DML_STATUS_OK != status) {
         ERROR("An error {} occurred during job finalization.", static_cast<int>(status));
-        free(dml_job_ptr);
+        free(*dml_job_ptr);
         return 1;
     }
-    free(dml_job_ptr);
+    free(*dml_job_ptr);
     DEBUG("Batch Memcpy Completed Successfully.");
     return 0;
 }
@@ -258,22 +259,27 @@ int DMA_memcpy_asynchronous(uint8_t* source, uint8_t* destination, size_t size, 
     size_t remaining_size = size;
     size_t offset = 0;
     int result;
+    std::vector<dml_job_t*> dml_job_ptrs;
     while (remaining_size > 0) {
         size_t current_transfer_size =
             (remaining_size > MAX_DMA_SIZE) ? MAX_DMA_SIZE : remaining_size;
         dml_job_t* dml_job_ptr;
         result = _batch_memcpy_asynchronous(
-            source + offset, destination + offset, current_transfer_size, numa, dml_job_ptr);
+            source + offset, destination + offset, current_transfer_size, numa, &dml_job_ptr);
         if (result != 0) {
             return 1;
         }
-        result = _batch_memcpy_asynchronous_wait(dml_job_ptr);
-        if (result != 0) {
-            return 1;
-        }
+        dml_job_ptrs.push_back(dml_job_ptr);
         remaining_size -= current_transfer_size;
         offset += current_transfer_size;
     }
+    for (auto it : dml_job_ptrs) {
+        result = _batch_memcpy_asynchronous_wait(&it);
+        if (result != 0) {
+            return 1;
+        }
+    }
+
 #ifdef STATISTICS
     auto end = system_clock::now();
     auto duration = duration_cast<microseconds>(end - start);
