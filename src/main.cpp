@@ -2,9 +2,12 @@
 #include <iostream>
 
 int main(int argc, char** argv) {
-    size_t size = std::stoull(argv[1]);
-    unsigned int batchsize = static_cast<unsigned int>(std::stoull(argv[2]));
-    unsigned int max_transfer_size = static_cast<unsigned int>(std::stoull(argv[3]));
+    // size_t size = std::stoull(argv[1]);
+    // unsigned int batchsize = static_cast<unsigned int>(std::stoull(argv[2]));
+    // unsigned int max_transfer_size = static_cast<unsigned int>(std::stoull(argv[3]));
+    size_t size = 4294967296llu;
+    unsigned int batchsize = 4u;
+    unsigned int max_transfer_size = 268435456u;
     uint8_t* source = new uint8_t[size];
     uint8_t* destination = new uint8_t[size];
 
@@ -25,6 +28,6 @@ int main(int argc, char** argv) {
         source[i] = i % 256;
     }
     // DMA_memcpy(source, destination, size, 1, batchsize, max_transfer_size);
-    hl_DMA_memcpy(source, destination, size, batchsize, max_transfer_size);
-    // hl_DMA_memcpy_asynchronous(source, destination, size, batchsize, max_transfer_size);
+    // hl_DMA_memcpy(source, destination, size, batchsize, max_transfer_size);
+    hl_DMA_memcpy_asynchronous(source, destination, size, batchsize, max_transfer_size);
 }

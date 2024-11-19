@@ -9,6 +9,14 @@ set(CMAKE_CXX_STANDARD 17)
 
 add_definitions(-DSTATISTICS)
 
+# Set build type to Debug if not specified
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Debug)
+endif()
+
+# Add debug flags
+set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 ${CMAKE_CXX_FLAGS}")
+
 set(CMAKE_CXX_FLAGS "-march=native  ${CMAKE_CXX_FLAGS}")
 include_directories(include)
 include_directories(~/DML/install/include)

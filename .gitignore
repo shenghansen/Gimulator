@@ -37,6 +37,8 @@ Thumbs.db
 #忽略格式化文件
 .clang-format
 
+# 忽略yyy用来debug的脚本
+sudo_gdb.sh
 
 /cxlmem
 /include/cxlmem
