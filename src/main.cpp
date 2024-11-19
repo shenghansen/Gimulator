@@ -29,6 +29,6 @@ int main(int argc, char** argv) {
     }
     // DMA_memcpy(source, destination, size, 1, batchsize, max_transfer_size);
     // DMA_memcpy_asynchronous(source, destination, size, 1);
-    // hl_DMA_memcpy(source, destination, size, batchsize, max_transfer_size);
-    hl_DMA_memcpy_asynchronous(source, destination, size, batchsize, max_transfer_size);
+    // hl_DMA_memcpy_sync_test(source, destination, size, batchsize, max_transfer_size);
+    hl_DMA_memcpy_async_test(source, destination, size, batchsize, max_transfer_size);
 }

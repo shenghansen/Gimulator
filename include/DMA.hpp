@@ -26,7 +26,7 @@ using namespace std::chrono;
 #define MAX_TRANSFER_SIZE 268435456u
 #define MAX_DMA_SIZE BATCH_SIZE* MAX_TRANSFER_SIZE
 
-class hl_DMA_async{
+class hl_DMA{
     private:
         uint8_t* source;
         uint8_t* destination;
@@ -34,12 +34,47 @@ class hl_DMA_async{
         unsigned int batchsize;
         unsigned int max_transfer_size;
         uint64_t max_dma_size;
-        // std::vector<dml::handler<dml::batch_operation, std::allocator<std::uint8_t>>> handlers;
         std::vector<std::shared_ptr<dml::sequence<std::allocator<dml::byte_t>>>> sequences;
         std::vector<std::unique_ptr<dml::handler<dml::batch_operation, std::allocator<std::uint8_t>>>> handlers;
+
+        int __hl_batch_memcpy_sync(uint8_t* source, uint8_t* destination, size_t size){
+            auto sequence = dml::sequence(batchsize, std::allocator<dml::byte_t>());
+            dml::status_code status;
+
+            // begin batch set
+            size_t buffer_size = size / batchsize;
+            size_t remainder = size % batchsize;
+            for(size_t i=0; i < batchsize - 1; i++){
+                status = sequence.add(dml::mem_move, 
+                                    dml::make_view(source + i * buffer_size, buffer_size),
+                                    dml::make_view(destination + i * buffer_size, buffer_size));
+                if(status != dml::status_code::ok){
+                    ERROR("An error {} occurred during setting of batch operation 1.",
+                        static_cast<int>(status));
+                    return 1;
+                }
+            }
+
+            status = sequence.add(dml::mem_move,
+                            dml::make_view(source + (batchsize - 1) * buffer_size, buffer_size + remainder),
+                            dml::make_view(destination + (batchsize - 1) * buffer_size, buffer_size + remainder));
+            if(status != dml::status_code::ok){
+                ERROR("An error {} occurred during setting of batch operation 2.",
+                        static_cast<int>(status));
+                return 1;
+            }
+
+            // execute
+            auto result = dml::execute<dml::hardware>(dml::batch, sequence);
+            if(result.status != dml::status_code::ok){
+                ERROR("An error {} occurred during job execution {}.", static_cast<int>(result.status), static_cast<int>(result.operations_completed));
+                return 1;
+            }
+            DEBUG("Batch Memcpy Completed Successfully.");
+            return 0;
+        }
         int __hl_batch_memcpy_async(uint8_t* source, uint8_t* destination, size_t size){
 
-            // auto sequence = dml::sequence(batchsize, std::allocator<dml::byte_t>());
             auto sequence = std::make_shared<dml::sequence<std::allocator<dml::byte_t>> >(
                 batchsize, std::allocator<dml::byte_t>());
             sequences.push_back(sequence);
@@ -68,63 +103,33 @@ class hl_DMA_async{
                 return 1;
             }
             // execute
-            // handlers.emplace_back(dml::submit<dml::hardware>(dml::batch, sequence));
             handlers.emplace_back(std::make_unique<dml::handler<dml::batch_operation, std::allocator<std::uint8_t>>>(
                 dml::submit<dml::hardware>(dml::batch, *sequence)));
             return 0;
         }
-//         int __hl_batch_memcpy_async(uint8_t* source, uint8_t* destination, size_t size){
-//             dml::sequence<>* sequence =
-//                 new dml::sequence(batchsize, std::allocator<std::uint8_t>());
-//             // auto sequence = dml::sequence(batchsize, std::allocator<std::uint8_t>());
-//             dml::status_code status;
-
-//             // begin batch set
-//             size_t buffer_size = size / batchsize;
-//             size_t remainder = size % batchsize;
-//             for(size_t i=0; i < batchsize - 1; i++){
-//                 status = sequence->add(dml::mem_move,
-//                                        dml::make_view(source + i * buffer_size, buffer_size),
-//                                        dml::make_view(destination + i * buffer_size, buffer_size));
-//                 if(status != dml::status_code::ok){
-//                     ERROR("An error {} occurred during setting of batch operation.",
-//                         static_cast<int>(status));
-//                     return 1;
-//                 }
-//             }
-//             status = sequence->add(
-//                 dml::mem_move,
-//                 dml::make_view(source + (batchsize - 1) * buffer_size, buffer_size + remainder),
-//                 dml::make_view(destination + (batchsize - 1) * buffer_size,
-//                                buffer_size + remainder));
-//             if(status != dml::status_code::ok){
-//                 ERROR("An error {} occurred during setting of batch operation.",
-//                         static_cast<int>(status));
-//             return 1;
-//             }
-//             // execute
-//             dml::handler<dml::batch_operation, std::allocator<std::uint8_t>>* handler =
-//                 new dml::handler<dml::batch_operation, std::allocator<std::uint8_t>>();
-//             *handler = dml::submit<dml::hardware>(dml::batch, *sequence);
-//             handlers.push_back(handler);
-//             return 0;
-//             }
     public:
-        hl_DMA_async(uint8_t* source, uint8_t* destination, size_t total_size,
+        hl_DMA(uint8_t* source, uint8_t* destination, size_t total_size,
                      unsigned int batchsize, unsigned int max_transfer_size):source(source),
                                                                              destination(destination),
                                                                              total_size(total_size),
                                                                              batchsize(batchsize), 
                                                                              max_transfer_size(max_transfer_size){
             max_dma_size = batchsize * max_transfer_size;
-            handlers.reserve(batchsize);
         };
-        // ~hl_DMA_async(){
-            // delete[] source;
-            // delete[] destination;
-            // handlers.clear();
-            // handlers.shrink_to_fit();
-        // };
+        int sync(){
+            size_t remaining_size = total_size;
+            size_t offset = 0;
+            while (remaining_size > 0) {
+                size_t current_transfer_size =
+                    (remaining_size > max_dma_size) ? max_dma_size : remaining_size;
+                        if(__hl_batch_memcpy_sync(source + offset,
+                                                destination + offset,
+                                                current_transfer_size))return 1;
+                remaining_size -= current_transfer_size;
+                offset += current_transfer_size;
+            }
+            return 0;
+        }
         int async(){
             size_t remaining_size = total_size;
             size_t offset = 0;
@@ -143,17 +148,12 @@ class hl_DMA_async{
             auto results = std::vector<dml::batch_result>();
             // synchronous operations
             for (auto& handler : handlers) {
-                // auto result = handler.get();
-                // if (result.status != dml::status_code::ok) {
-                //     ERROR("An error {} occurred during job waiting.", static_cast<int>(result.status));
-                //     return 1;
-                // }
                 results.emplace_back(handler->get());
             }
 
             for(auto& result : results){
                 if (result.status != dml::status_code::ok) {
-                    // ERROR("An error {} occurred during job waiting.", static_cast<int>(result.status));
+                    ERROR("An error {} occurred during job waiting.", static_cast<int>(result.status));
                     return 1;
                 }
             }
@@ -447,78 +447,18 @@ int DMA_memcpy_asynchronous(uint8_t* source, uint8_t* destination, size_t size, 
 /* By default, the library selects devices from any NUMA node within the socket of the calling thread. 
    If more fine-grained control is needed, the Low-Level API of the library provides the ability to 
    select devices from a specific NUMA node using the numa_id field in the job structure. */
-int _hl_batch_memcpy(uint8_t* source, uint8_t* destination, size_t size, unsigned int batchsize){
-// #ifdef STATISTICS
-//     auto start = system_clock::now();
-// #endif
-    auto sequence = dml::sequence(batchsize, std::allocator<dml::byte_t>());
-    dml::status_code status;
 
-    // begin batch set
-    size_t buffer_size = size / batchsize;
-    size_t remainder = size % batchsize;
-    for(size_t i=0; i < batchsize - 1; i++){
-        status = sequence.add(dml::mem_move, 
-                              dml::make_view(source + i * buffer_size, buffer_size),
-                              dml::make_view(destination + i * buffer_size, buffer_size));
-        if(status != dml::status_code::ok){
-            ERROR("An error {} occurred during setting of batch operation 1.",
-                  static_cast<int>(status));
-            return 1;
-        }
-    }
 
-    status = sequence.add(dml::mem_move,
-                    dml::make_view(source + (batchsize - 1) * buffer_size, buffer_size + remainder),
-                    dml::make_view(destination + (batchsize - 1) * buffer_size, buffer_size + remainder));
-    if(status != dml::status_code::ok){
-        ERROR("An error {} occurred during setting of batch operation 2.",
-                static_cast<int>(status));
-        return 1;
-    }
-
-    // execute
-    auto result = dml::execute<dml::hardware>(dml::batch, sequence);
-    if(result.status != dml::status_code::ok){
-        ERROR("An error {} occurred during job execution {}.", static_cast<int>(result.status), static_cast<int>(result.operations_completed));
-        return 1;
-    }
-// #ifdef STATISTICS
-//     auto end = system_clock::now();
-//     auto duration = duration_cast<microseconds>(end - start);
-//     double size_in_gb = static_cast<double>(size) / 1024 / 1024 / 1024;
-//     double duration_in_seconds = static_cast<double>(duration.count()) * microseconds::period::num /
-//                                  microseconds::period::den;
-//     double bandwidth = size_in_gb / duration_in_seconds;
-//     INFO("Batch size: {} GB", size_in_gb);
-//     INFO("Batch time: {} s",
-//          double(duration.count()) * microseconds::period::num / microseconds::period::den);
-
-//     INFO("Batch bandwidth: {} GB/s", bandwidth);
-// #endif
-    DEBUG("Batch Memcpy Completed Successfully.");
-    return 0;
-}
-
-int hl_DMA_memcpy(uint8_t* source, uint8_t* destination, size_t size, unsigned int batchsize, unsigned int max_transfer_size){
-    // INFO("Total size: {}, Batchsize: {}, MAX_TRANSFER_SIZE:{}", size, batchsize, max_transfer_size);
-    unsigned long max_dma_size = batchsize * max_transfer_size;
+int hl_DMA_memcpy_sync_test(uint8_t* source, uint8_t* destination, size_t size, unsigned int batchsize, unsigned int max_transfer_size){
 #ifdef STATISTICS
     auto start = system_clock::now();
 #endif
-    size_t remaining_size = size;
-    size_t offset = 0;
-    int result;
-    while (remaining_size > 0) {
-        size_t current_transfer_size =
-            (remaining_size > max_dma_size) ? max_dma_size : remaining_size;
-        result = _hl_batch_memcpy(source + offset, destination + offset, current_transfer_size, batchsize);
-        if (result != 0) {
-            return 1;
-        }
-        remaining_size -= current_transfer_size;
-        offset += current_transfer_size;
-    }
+    auto hl_dma_sync = hl_DMA(source, destination, size, batchsize, max_transfer_size);
+    // sync
+    if(hl_dma_sync.sync()){
+        return 1;
+    };
+
 #ifdef STATISTICS
     auto end = system_clock::now();
     auto duration = duration_cast<microseconds>(end - start);
@@ -535,90 +475,15 @@ int hl_DMA_memcpy(uint8_t* source, uint8_t* destination, size_t size, unsigned i
     return 0;
 }
 
-// dml::handler<dml::batch_operation, std::allocator<std::uint8_t>>
-//  _hl_batch_memcpy_asynchronous(uint8_t* source, uint8_t* destination, size_t size, unsigned int batchsize){
-//     auto sequence = dml::sequence(batchsize, std::allocator<dml::byte_t>());
-//     dml::status_code status;
-
-//     // begin batch set
-//     size_t buffer_size = size / batchsize;
-//     size_t remainder = size % batchsize;
-//     for(size_t i=0; i < batchsize - 1; i++){
-//         status = sequence.add(dml::mem_move, 
-//                               dml::make_view(source + i * buffer_size, buffer_size),
-//                               dml::make_view(destination + i * buffer_size, buffer_size));
-//         if(status != dml::status_code::ok){
-//             ERROR("An error {} occurred during setting of batch operation.",
-//                   static_cast<int>(status));
-//             // return 1;
-//             exit(0);
-//         }
-//     }
-//     status = sequence.add(dml::mem_move,
-//                           dml::make_view(source + (batchsize - 1) * buffer_size, buffer_size + remainder),
-//                           dml::make_view(destination + (batchsize - 1) * buffer_size, buffer_size + remainder));
-//     if(status != dml::status_code::ok){
-//         ERROR("An error {} occurred during setting of batch operation.",
-//                 static_cast<int>(status));
-//         // return 1;
-//         exit(0);
-//     }
-//     // execute
-//     auto handler = dml::submit<dml::hardware>(dml::batch, sequence);
-//     return std::move(handler);    
-// }
-
-// std::vector<dml::handler<dml::batch_operation, std::allocator<std::uint8_t>>> 
-// hl_DMA_memcpy_sync(uint8_t* source, uint8_t* destination, size_t size, unsigned int batchsize, unsigned int max_transfer_size) {
-//     unsigned long max_dma_size = batchsize * max_transfer_size;
-//     size_t remaining_size = size;
-//     size_t offset = 0;
-//     std::vector<dml::handler<dml::batch_operation, std::allocator<std::uint8_t>>> handlers;
-
-//     while (remaining_size > 0) {
-//         size_t current_transfer_size =
-//             (remaining_size > max_dma_size) ? max_dma_size : remaining_size;
-//         handlers.emplace_back(_hl_batch_memcpy_asynchronous(source + offset,
-//                                                             destination + offset,
-//                                                             current_transfer_size,
-//                                                             batchsize));
-//         remaining_size -= current_transfer_size;
-//         offset += current_transfer_size;
-//     }
-
-//     // Copy Elision ?
-//     // return std::move(handlers);
-//     return handlers;
-// }
-
-// int hl_DMA_memcpy_wait(std::vector<dml::handler<dml::batch_operation, std::allocator<std::uint8_t>>>& handlers) {
-//     // synchronous operations
-//     for (auto& handler : handlers) {
-//         auto result = handler.get();
-//         if (result.status != dml::status_code::ok) {
-//             ERROR("An error {} occurred during job waiting.", static_cast<int>(result.status));
-//             return 1;
-//         }
-//     }
-//     return 0;
-// }
-
-int hl_DMA_memcpy_asynchronous(uint8_t* source, uint8_t* destination, size_t size, unsigned int batchsize, unsigned int max_transfer_size) {
+int hl_DMA_memcpy_async_test(uint8_t* source, uint8_t* destination, size_t size, unsigned int batchsize, unsigned int max_transfer_size) {
 #ifdef STATISTICS
     auto start = system_clock::now();
 #endif
-    // auto handlers = hl_DMA_memcpy_sync(source, destination, size, batchsize, max_transfer_size);
-
-    // int status = hl_DMA_memcpy_wait(handlers);
-    // if (status != 0) {
-    //     return status;
-    // }
-    auto hl_dma_async = hl_DMA_async(source, destination, size, batchsize, max_transfer_size);
+    auto hl_dma_async = hl_DMA(source, destination, size, batchsize, max_transfer_size);
     // async
     if(hl_dma_async.async()){
         return 0;
     };
-    // INFO("batch job are all launched");s
     // sync
     int status = hl_dma_async.wait();
     if(status != 0){
@@ -632,14 +497,9 @@ int hl_DMA_memcpy_asynchronous(uint8_t* source, uint8_t* destination, size_t siz
     double duration_in_seconds = static_cast<double>(duration.count()) * microseconds::period::num /
                                  microseconds::period::den;
     double bandwidth = size_in_gb / duration_in_seconds;
-    // spdlog::set_default_logger(spdlog::stdout_color_mt("console"));
     INFO("DMA size: {} GB", size_in_gb);
     INFO("DMA time: {} s", double(duration.count()) * microseconds::period::num / microseconds::period::den);
     INFO("DMA bandwidth: {} GB/s", bandwidth);
-    // printf("DMA size: %f GB", size_in_gb);
-    // printf("DMA time: %f s", double(duration.count()) * microseconds::period::num / microseconds::period::den);
-    // printf("DMA bandwidth: %f GB/s", bandwidth);
-
 #endif
     DEBUG("Batch Memcpy Completed Successfully.");
     return 0;
