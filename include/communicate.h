@@ -33,6 +33,7 @@ public:
     queue();
 };
 
+
 class GIM_comm {
     CXL_SHM* cxl_shm;
     queue** send_queue;   // queue* [num_hosts]
@@ -44,8 +45,33 @@ class GIM_comm {
     GIM_comm(CXL_SHM* cxl_shm);
     ~GIM_comm();
 
-    bool GIM_Send(uint8_t* source, size_t size, int destination_id, int tag,size_t*** recv_buffer );
+    // bool GIM_Send(uint8_t* source, size_t size, int destination_id, int tag,size_t*** recv_buffer );
+    template<typename T>
     bool GIM_Send(uint8_t* source, size_t socket, size_t size, int destination_id, int tag,
-                  size_t*** recv_buffer);
+                  T*** recv_buffer) {
+        int index = send_queue[host_id]->get();
+        send_queue[host_id]->data[index].size = size;
+        send_queue[host_id]->data[index].id = destination_id;
+        send_queue[host_id]->data[index].tag = tag;
+        // send_queue[host_id]->data[index].addr=source;
+        send_queue[host_id]->data[index].working_flag = 0;
+
+        DEBUG("host {} push send ,index{}\n", host_id, index);
+        memcpy(recv_buffer[host_id][socket], source, size);
+        // hl_DMA_memcpy(
+        //     source, reinterpret_cast<uint8_t*>(recv_buffer[host_id][socket]), size, host_id * SNC);
+        // hl_DMA dma(source, recv_buffer[host_id][socket], size, host_id * SNC);
+        // dma.sync();
+        send_queue[host_id]->data[index].working_flag = 1;
+        bool flag = true;
+        while (flag) {
+            if (send_queue[host_id]->data[index].working_flag == 2) {
+                flag = false;
+            }
+        }
+        send_queue[host_id]->pop(index);
+        DEBUG("host {}send end \n", host_id);
+        return true;
+    }
     bool GIM_Recv(size_t index, size_t size, int source_id, int tag);// index means socket
 };

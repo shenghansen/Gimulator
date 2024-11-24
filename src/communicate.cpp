@@ -63,78 +63,78 @@ GIM_comm::~GIM_comm() {
     delete[] recv_queue;
 }
 
-bool GIM_comm::GIM_Send(uint8_t* source, size_t size, int destination_id, int tag,
-                        size_t*** recv_buffer) {
-    // queue_element element ;
-    // element.size = size;
-    // element.id = destination_id;
-    // element.tag = tag;
-    // element.addr = source;
-    // element.working_flag = 0;
-    // send_queue[host_id]->push(element);
+// bool GIM_comm::GIM_Send(uint8_t* source, size_t size, int destination_id, int tag,
+//                         size_t*** recv_buffer) {
+//     // queue_element element ;
+//     // element.size = size;
+//     // element.id = destination_id;
+//     // element.tag = tag;
+//     // element.addr = source;
+//     // element.working_flag = 0;
+//     // send_queue[host_id]->push(element);
 
-    int index = send_queue[host_id]->get();
-    send_queue[host_id]->data[index].size = size;
-    send_queue[host_id]->data[index].id = destination_id;
-    send_queue[host_id]->data[index].tag = tag;
-    // send_queue[host_id]->data[index].addr=source;
-    send_queue[host_id]->data[index].working_flag = 0;
+//     int index = send_queue[host_id]->get();
+//     send_queue[host_id]->data[index].size = size;
+//     send_queue[host_id]->data[index].id = destination_id;
+//     send_queue[host_id]->data[index].tag = tag;
+//     // send_queue[host_id]->data[index].addr=source;
+//     send_queue[host_id]->data[index].working_flag = 0;
 
-    DEBUG("push send ,index{}\n",index);
-    bool flag = true;
-    while (flag) {
-        if (send_queue[host_id]->data[index].working_flag == 1) {
-            // DEBUG("begin send\n");
-            for (auto& q : recv_queue[destination_id]->data) {
-                if (q.working_flag == 0 && q.id == host_id && q.size == size) {
-                    // hl_DMA dma(source, recv_buffer[host_id][q.index], size, host_id * SNC);
-                    // dma.sync();
-                    memcpy(recv_buffer[host_id][q.index], source, size);
-                    q.working_flag = 1;
-                    flag = false;
-                    break;
-                }
-            }
-        }
-    }
-    send_queue[host_id]->pop(index);
-    DEBUG("send end \n");
-    return true;
-}
+//     DEBUG("push send ,index{}\n",index);
+//     bool flag = true;
+//     while (flag) {
+//         if (send_queue[host_id]->data[index].working_flag == 1) {
+//             // DEBUG("begin send\n");
+//             for (auto& q : recv_queue[destination_id]->data) {
+//                 if (q.working_flag == 0 && q.id == host_id && q.size == size) {
+//                     // hl_DMA dma(source, recv_buffer[host_id][q.index], size, host_id * SNC);
+//                     // dma.sync();
+//                     memcpy(recv_buffer[host_id][q.index], source, size);
+//                     q.working_flag = 1;
+//                     flag = false;
+//                     break;
+//                 }
+//             }
+//         }
+//     }
+//     send_queue[host_id]->pop(index);
+//     DEBUG("send end \n");
+//     return true;
+// }
+// template<typename T>
+// bool GIM_comm::GIM_Send(uint8_t* source, size_t socket, size_t size, int destination_id, int tag,
+//                         T*** recv_buffer) {
+//     // queue_element element ;
+//     // element.size = size;
+//     // element.id = destination_id;
+//     // element.tag = tag;
+//     // element.addr = source;
+//     // element.working_flag = 0;
+//     // send_queue[host_id]->push(element);
 
-bool GIM_comm::GIM_Send(uint8_t* source, size_t socket, size_t size, int destination_id, int tag,
-                        size_t*** recv_buffer) {
-    // queue_element element ;
-    // element.size = size;
-    // element.id = destination_id;
-    // element.tag = tag;
-    // element.addr = source;
-    // element.working_flag = 0;
-    // send_queue[host_id]->push(element);
+//     int index = send_queue[host_id]->get();
+//     send_queue[host_id]->data[index].size = size;
+//     send_queue[host_id]->data[index].id = destination_id;
+//     send_queue[host_id]->data[index].tag = tag;
+//     // send_queue[host_id]->data[index].addr=source;
+//     send_queue[host_id]->data[index].working_flag = 0;
 
-    int index = send_queue[host_id]->get();
-    send_queue[host_id]->data[index].size = size;
-    send_queue[host_id]->data[index].id = destination_id;
-    send_queue[host_id]->data[index].tag = tag;
-    // send_queue[host_id]->data[index].addr=source;
-    send_queue[host_id]->data[index].working_flag = 0;
-
-    DEBUG("host {} push send ,index{}\n",host_id, index);
-    // memcpy(recv_buffer[host_id][socket], source, size);
-    hl_DMA_memcpy(source, reinterpret_cast<uint8_t*>(recv_buffer[host_id][socket]), size, host_id * SNC);
-    // hl_DMA dma(source, recv_buffer[host_id][socket], size, host_id * SNC);
-    // dma.sync();
-    send_queue[host_id]->data[index].working_flag = 1;
-    bool flag = true;
-    while (flag) {
-        if (send_queue[host_id]->data[index].working_flag == 2) {
-            flag = false;
-        }
-    }
-    send_queue[host_id]->pop(index);
-    DEBUG("host {}send end \n",host_id);
-    return true;
-}
+//     DEBUG("host {} push send ,index{}\n",host_id, index);
+//     // memcpy(recv_buffer[host_id][socket], source, size);
+//     hl_DMA_memcpy(source, reinterpret_cast<uint8_t*>(recv_buffer[host_id][socket]), size, host_id * SNC);
+//     // hl_DMA dma(source, recv_buffer[host_id][socket], size, host_id * SNC);
+//     // dma.sync();
+//     send_queue[host_id]->data[index].working_flag = 1;
+//     bool flag = true;
+//     while (flag) {
+//         if (send_queue[host_id]->data[index].working_flag == 2) {
+//             flag = false;
+//         }
+//     }
+//     send_queue[host_id]->pop(index);
+//     DEBUG("host {}send end \n",host_id);
+//     return true;
+// }
 
 
 bool GIM_comm::GIM_Recv(size_t index, size_t size, int source_id, int tag) {
