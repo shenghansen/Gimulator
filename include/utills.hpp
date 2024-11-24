@@ -1,5 +1,4 @@
-#ifndef UTILLS_H
-#define UTILLS_H
+#pragma once
 
 // spdlog
 #include "spdlog/spdlog.h"
@@ -10,7 +9,7 @@
 
 // MEMINFO
 #include <stdio.h>
-void dump_memory_maps() {
+inline void dump_memory_maps() {
     printf("Dump /proc/self/maps\n");
     int maps_fd = open("/proc/self/maps", O_RDONLY);
     if (maps_fd == -1) {
@@ -54,5 +53,3 @@ template<int inject_ns> inline uint64_t inject_latency_ns() {
 
 #define INLINE __attribute__((always_inline)) inline
 
-
-#endif

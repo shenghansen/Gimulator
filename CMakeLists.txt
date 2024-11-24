@@ -1,16 +1,34 @@
 cmake_minimum_required(VERSION 3.22)
 project( GIMULATOR )
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-find_package(OpenMP REQUIRED)
-set(CMAKE_CXX_STANDARD 17)
+set(DML_DIR ~/DML/install/lib/cmake/DML)
 
+find_package(OpenMP REQUIRED)
+find_package(DML REQUIRED)
+find_package(MPI REQUIRED)
+set(CMAKE_CXX_STANDARD 17)
 
 add_definitions(-DSTATISTICS)
 
-set(CMAKE_CXX_FLAGS "-march=native -g  ${CMAKE_CXX_FLAGS}")
+# Set build type to Debug if not specified
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Debug)
+endif()
+
+# Add debug flags
+set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 ${CMAKE_CXX_FLAGS}")
+set(CMAKE_CXX_FLAGS "-march=native  ${CMAKE_CXX_FLAGS}")
+
+
 include_directories(include)
-add_executable(demo ${CMAKE_SOURCE_DIR}/src/main.cpp)
-target_link_libraries(demo numa dml dmlhl OpenMP::OpenMP_CXX)
+include_directories(${MPI_INCLUDE_PATH})
+include_directories(~/DML/install/include)
+
+add_executable(demo test/test_dma.cpp src/DMA.cpp src/CXL_SHM.cpp)
+target_link_libraries(demo numa dml dmlhl OpenMP::OpenMP_CXX ${MPI_LIBRARIES})
+
+add_executable(gim test/test_gim.cpp src/CXL_SHM.cpp src/DMA.cpp src/communicate.cpp)
+target_link_libraries(gim numa dml dmlhl OpenMP::OpenMP_CXX ${MPI_LIBRARIES})
 
 
 
