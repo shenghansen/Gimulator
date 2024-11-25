@@ -7,7 +7,7 @@
 #pragma once
 #define CAP 10
 
-#define SNC 2
+// #define SNC 2
 
 struct GIM_status {};
 

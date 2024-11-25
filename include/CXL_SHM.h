@@ -22,6 +22,7 @@
 #define CXL_SHM_SIZE 1LL * 1024 * 1024 * 1024
 #define GIM_LATENCY 300
 #define CACHE_LINE_SIZE 64
+#define SNC 2
 
 class CXL_SHM {
 private:
@@ -40,7 +41,9 @@ public:
             size_t gim_size = GIM_SIZE);
     ~CXL_SHM();
     uint8_t* GIM_malloc(size_t size, int id);
-    void GIM_free(uint8_t* ptr, int host_id);
+    void GIM_free(uint8_t* ptr, int id);
+    uint8_t* GIM_malloc(size_t size, int id,int numa);
+    void GIM_free(uint8_t* ptr, int id,int numa);
     uint8_t* CXL_SHM_malloc(size_t size);
     void CXL_SHM_free(uint8_t* ptr);
 

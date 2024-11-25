@@ -11,16 +11,16 @@
 #include <sys/types.h>
 
 CXL_SHM::CXL_SHM(int num_hosts, int host_id, size_t cxl_shm_size, size_t gim_size) {
-    this->gim_size = new size_t[num_hosts];
+    this->gim_size = new size_t[num_hosts*SNC];
     this->cxl_shm_size = cxl_shm_size;
     CXL_shm = new uint8_t[cxl_shm_size];
-    GIM_mem = new uint8_t*[num_hosts];
-    gim_offset = new std::atomic_uint64_t[num_hosts];
+    GIM_mem = new uint8_t*[num_hosts*SNC];
+    gim_offset = new std::atomic_uint64_t[num_hosts*SNC];
     this->num_hosts = num_hosts;
     this->host_id = host_id;
-    this->shmid = new int[num_hosts + 1];
+    this->shmid = new int[num_hosts*SNC + 1];
     // gim_mem init
-    for (int i = 0; i < num_hosts; i++) {
+    for (int i = 0; i < num_hosts*SNC; i++) {
         shmid[i] = shmget((key_t)i + 1, GIM_SIZE, 0666 | IPC_CREAT);
         if (shmid[i] == -1) {
             fprintf(stderr, "shmat failed\n");
@@ -73,7 +73,7 @@ CXL_SHM::CXL_SHM(int num_hosts, int host_id, size_t cxl_shm_size, size_t gim_siz
 }
 
 CXL_SHM::~CXL_SHM() {
-    for (int i = 0; i < num_hosts; i++) {
+    for (int i = 0; i < num_hosts*SNC; i++) {
         shmdt(GIM_mem[i]);
     }
     if (host_id == 0) {
@@ -90,21 +90,21 @@ CXL_SHM::~CXL_SHM() {
     delete shmid;
 }
 
-uint8_t* CXL_SHM::GIM_malloc(size_t size, int host_id) {
+uint8_t* CXL_SHM::GIM_malloc(size_t size, int id) {
     DEBUG("cxl malloc size  {} on numa {}", size, host_id);
     if (size < 64) {
         size = 64;
     } else {
         size = 64 * ((size + 63) / 64);
     }
-
-    uint64_t old_offset = gim_offset[host_id].fetch_add(size);
+    int real_numa = id*SNC;
+    uint64_t old_offset = gim_offset[real_numa].fetch_add(size);
     uint64_t new_offset = old_offset + size;
-    if (new_offset > gim_size[host_id]) {
+    if (new_offset > gim_size[real_numa]) {
         ERROR("OOM ! GIM_mem reach the capacity limit");
         return nullptr;
     }
-    return GIM_mem[host_id] + old_offset;
+    return GIM_mem[real_numa] + old_offset;
 }
 
 void CXL_SHM::GIM_free(uint8_t* ptr, int id) {
@@ -112,7 +112,38 @@ void CXL_SHM::GIM_free(uint8_t* ptr, int id) {
     if (ptr == nullptr) {
         return;
     }
-    if (ptr < GIM_mem[id] || ptr > GIM_mem[id] + gim_size[id]) {
+    int real_numa = id * SNC;
+    if (ptr < GIM_mem[real_numa] || ptr > GIM_mem[real_numa] + gim_size[real_numa]) {
+        ERROR("free invalid pointer");
+        return;
+    }
+    // FIXME: real mempoll not native
+    return;
+}
+uint8_t* CXL_SHM::GIM_malloc(size_t size, int id,int numa) {
+    DEBUG("cxl malloc size  {} on numa {}", size, id*SNC+numa);
+    if (size < 64) {
+        size = 64;
+    } else {
+        size = 64 * ((size + 63) / 64);
+    }
+    int real_numa = id * SNC+numa;
+    uint64_t old_offset = gim_offset[real_numa].fetch_add(size);
+    uint64_t new_offset = old_offset + size;
+    if (new_offset > gim_size[real_numa]) {
+        ERROR("OOM ! GIM_mem reach the capacity limit");
+        return nullptr;
+    }
+    return GIM_mem[real_numa] + old_offset;
+}
+
+void CXL_SHM::GIM_free(uint8_t* ptr, int id,int numa) {
+    DEBUG("cxl free ptr {} size  {} on numa {}", ptr, size, id* SNC+numa);
+    if (ptr == nullptr) {
+        return;
+    }
+    int real_numa = id * SNC + numa;
+    if (ptr < GIM_mem[real_numa] || ptr > GIM_mem[real_numa] + gim_size[real_numa]) {
         ERROR("free invalid pointer");
         return;
     }
