@@ -332,6 +332,7 @@ int _batch_memcpy_asynchronous_check(dml_job_t** dml_job_ptr) {
     case 0: INFO("DML_STATUS_OK."); break;
     case 2: INFO("DML_STATUS_BEING_PROCESSED."); break;
     case 23: INFO("DML_STATUS_JOB_CORRUPTED."); return 1;
+    default : INFO("DML_STATUS_OTHER."); return 1;
     }
     return 0;
 }

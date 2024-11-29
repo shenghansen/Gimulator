@@ -48,13 +48,14 @@ private:
 
 public:
     hl_DMA(uint8_t* source, uint8_t* destination, size_t total_size, int numa)
-        : source(source)
+        : numa(numa)
+        , source(source)
         , destination(destination)
-        , total_size(total_size)
-        , numa(numa){
-            batchsize=BATCH_SIZE;
-            max_transfer_size=MAX_TRANSFER_SIZE;
-            max_dma_size = MAX_DMA_SIZE;};
+        , total_size(total_size) {
+        batchsize = BATCH_SIZE;
+        max_transfer_size = MAX_TRANSFER_SIZE;
+        max_dma_size = MAX_DMA_SIZE;
+    };
     int sync();
     int async();
     int wait();
@@ -78,10 +79,8 @@ int DMA_memcpy_asynchronous(uint8_t* source, uint8_t* destination, size_t size, 
  */
 
 
-int hl_DMA_memcpy_sync_test(uint8_t* source, uint8_t* destination, size_t size,
-                            int numa);
-int hl_DMA_memcpy_async_test(uint8_t* source, uint8_t* destination, size_t size,
-                             int numa);
+int hl_DMA_memcpy_sync_test(uint8_t* source, uint8_t* destination, size_t size, int numa);
+int hl_DMA_memcpy_async_test(uint8_t* source, uint8_t* destination, size_t size, int numa);
 
 int hl_DMA_memcpy(uint8_t* source, uint8_t* destination, size_t size, u_int32_t numa);
 
