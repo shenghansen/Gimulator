@@ -1,5 +1,6 @@
 #include "communicate.h"
 #include "mpi.h"
+#include "utills.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <omp.h>
@@ -8,8 +9,9 @@
 #define NUMA 4
 #define PARTITIONS 2
 
-int main(int argc, char** argv) {
 
+int main(int argc, char** argv) {
+    spdlog::set_level(spdlog::level::debug);
     /* single process test */
     //     CXL_SHM cxl(1, 0);
     //     GIM_comm comm(cxl);
@@ -118,7 +120,7 @@ int main(int argc, char** argv) {
 
 
 
-    
+
     size_t*** send_buffer[world_size];
     size_t*** recv_buffer[world_size];
     for (size_t i = 0; i < world_size; i++) {
@@ -133,39 +135,54 @@ int main(int argc, char** argv) {
             }
         }
     }
-    for (size_t i = 0; i < world_size; i++) {
+
         for (size_t j = 0; j < world_size; j++) {
 #pragma omp parallel for
-            for (int step = 0; step < SIZE; step++) {
-                send_buffer[i][j][0][step] = step % 512 + 1;
-                recv_buffer[i][j][0][step] = 0;
+            for (size_t k = 0; k < NUMA; k++) {
+                for (int step = 0; step < SIZE; step++) {
+                    send_buffer[world_rank][j][k][step] = step % 512 + 1;
+                    recv_buffer[world_rank][j][k][step] = 0;
+                }
             }
         }
-    }
+
     MPI_Barrier(MPI_COMM_WORLD);
+    INFO("aaa");
     std::thread send_thread([&]() {
         for (int step = 1; step < world_size; step++) {   //遍历host
             int i = (world_rank - step + world_size) % world_size;
-            comm.GIM_Send(reinterpret_cast<uint8_t*>(send_buffer[world_rank][i][0]), 0,SIZE*sizeof(size_t), i, 0,recv_buffer[i]);
+            for (size_t s_i = 0; s_i < NUMA; s_i++) {
+                comm.GIM_Send(send_buffer[world_rank][i][s_i],
+                              SIZE * sizeof(size_t),
+                              i,
+                              0,
+                              recv_buffer[i][world_rank][s_i]);
+            }
         }
     });
     std::thread recv_thread([&]() {
         for (int step = 1; step < world_size; step++) {   //遍历host
             int i = (world_rank + step) % world_size;
-            comm.GIM_Recv(0, SIZE * sizeof(size_t), i, 0);
+            for (size_t s_i = 0; s_i < NUMA; s_i++) {
+                comm.GIM_Recv(SIZE * sizeof(size_t), i, 0);
+            }
         }
     });
+    INFO("aaa");
     send_thread.join();
     recv_thread.join();
     MPI_Barrier(MPI_COMM_WORLD);
+    INFO("aaa");
     size_t count = 0;
     for (int step = 1; step < world_size; step++) {   //遍历host
         int i = (world_rank + step) % world_size;
         // #pragma omp parallel for
-        for (int j = 0; j < SIZE; j++) {
-            if (recv_buffer[world_rank][i][0][j] != j % 512 + 1) {
-                // printf("%d,%d\n",j, recv_buffer[world_rank][i][0][j]);
-                count++;
+        for (size_t s_i = 0; s_i < NUMA; s_i++) {
+            for (int j = 0; j < SIZE; j++) {
+                if (recv_buffer[world_rank][i][s_i][j] != j % 512 + 1) {
+                    // printf("%d,%d\n",j, recv_buffer[world_rank][i][0][j]);
+                    count++;
+                }
             }
         }
     }

@@ -164,7 +164,6 @@ uint8_t* CXL_SHM::GIM_malloc(size_t size, int id) {
 }
 
 void CXL_SHM::GIM_free(uint8_t* ptr, int id) {
-    DEBUG("cxl free ptr {} size  {} on numa {}", ptr, size, id);
     if (ptr == nullptr) {
         return;
     }
@@ -194,7 +193,6 @@ uint8_t* CXL_SHM::GIM_malloc(size_t size, int id,int numa) {
 }
 
 void CXL_SHM::GIM_free(uint8_t* ptr, int id,int numa) {
-    DEBUG("cxl free ptr {} size  {} on numa {}", ptr, size, id* SNC+numa);
     if (ptr == nullptr) {
         return;
     }
@@ -225,7 +223,6 @@ uint8_t* CXL_SHM::CXL_SHM_malloc(size_t size) {
 }
 
 void CXL_SHM::CXL_SHM_free(uint8_t* ptr) {
-    DEBUG("cxl free ptr {} size  {} on numa {}", ptr, size, host_id);
     if (ptr == nullptr) {
         return;
     }

@@ -12,21 +12,9 @@ int queue::get() {
     return  true;
 }
 
-
-// int queue::push(queue_element element) {
-//     std::lock_guard<std::mutex> lock(mtx);
-//     if (data[index % CAP].working_flag == -1) {
-//         data[index % CAP] = element;
-//         index++;
-//         return true;
-//     }
-
-//     return false;
-// }
-
-bool queue::pop(int index) {
+bool queue::pop(int i) {
     std::lock_guard<std::mutex> lock(mtx);
-    data[index].working_flag = -1;
+    data[i].working_flag = -1;
     return true;
 }
 
@@ -137,13 +125,13 @@ GIM_comm::~GIM_comm() {
 // }
 
 
-bool GIM_comm::GIM_Recv(size_t index, size_t size, int source_id, int tag) {
+bool GIM_comm::GIM_Recv(size_t size, int source_id, int tag) {
 
     bool flag = true;
     while (flag) {
         for (auto& q : send_queue[source_id]->data) {
             if (q.working_flag != -1 && q.id == host_id && q.size == size) {
-                DEBUG("recv {} find send\n",host_id);
+                DEBUG("recv {} find send",host_id);
                 while (flag) {
                     if (q.working_flag == 1) {
                         q.working_flag = 2;

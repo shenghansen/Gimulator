@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <mutex>
 #pragma once
-#define CAP 10
+#define CAP 100
 
 // #define SNC 2
 
@@ -15,7 +15,6 @@ struct queue_element {
     size_t size;
     int id;
     int tag;
-    size_t index{0};
     std::atomic<int> working_flag{-1};
 };
 
@@ -47,17 +46,14 @@ public:
 
     // bool GIM_Send(uint8_t* source, size_t size, int destination_id, int tag,size_t*** recv_buffer
     // );
-    template<typename T>
-    bool GIM_Send(uint8_t* source, size_t socket, size_t size, int destination_id, int tag,
-                  T*** recv_buffer) {
+    bool GIM_Send(void* source, size_t size, int destination_id, int tag,
+                  void* destination) {
         int index = send_queue[host_id]->get();
         send_queue[host_id]->data[index].size = size;
         send_queue[host_id]->data[index].id = destination_id;
         send_queue[host_id]->data[index].tag = tag;
-        // send_queue[host_id]->data[index].addr=source;
         send_queue[host_id]->data[index].working_flag = 0;
-
-        DEBUG("host {} push send ,index{}\n", host_id, index);
+        DEBUG("host {} push send ,index{}", host_id, index);
         // memcpy(recv_buffer[host_id][socket], source, size);
         // hl_DMA_memcpy(
         //     source, reinterpret_cast<uint8_t*>(recv_buffer[host_id][socket]), size, host_id *
@@ -67,8 +63,10 @@ public:
         if (host_id >= numas) {
             numa_id = host_id % numas*SNC;
         }
-        hl_DMA dma(
-            source, reinterpret_cast<uint8_t*>(recv_buffer[host_id][socket]), size, numa_id);
+        hl_DMA dma(reinterpret_cast<uint8_t*> (source),
+                   reinterpret_cast<uint8_t*>(destination),
+                   size,
+                   numa_id);
         dma.sync();
         send_queue[host_id]->data[index].working_flag = 1;
         bool flag = true;
@@ -78,8 +76,8 @@ public:
             }
         }
         send_queue[host_id]->pop(index);
-        DEBUG("host {}send end \n", host_id);
+        DEBUG("host {}send end", host_id);
         return true;
     }
-    bool GIM_Recv(size_t index, size_t size, int source_id, int tag);   // index means socket
+    bool GIM_Recv(size_t size, int source_id, int tag);   // index means socket
 };
