@@ -8,6 +8,7 @@
 #include "CXL_SHM.h"
 #include "utills.hpp"
 #include <cstddef>
+#include <string>
 #include <sys/types.h>
 
 CXL_SHM::CXL_SHM(int num_hosts, int host_id, size_t cxl_shm_size, size_t gim_size) {
@@ -19,30 +20,31 @@ CXL_SHM::CXL_SHM(int num_hosts, int host_id, size_t cxl_shm_size, size_t gim_siz
     this->num_hosts = num_hosts;
     this->host_id = host_id;
     this->shmid = new int[num_hosts*SNC + 1];
+    /* shm version */
     // gim_mem init
     for (int i = 0; i < num_hosts*SNC; i++) {
         shmid[i] = shmget((key_t)i + 1, GIM_SIZE, 0666 | IPC_CREAT);
         if (shmid[i] == -1) {
-            fprintf(stderr, "shmat failed\n");
+            ERROR("shmat failed");
             exit(EXIT_FAILURE);
         }
         void* result = shmat(shmid[i], NULL, 0);
 
         if (result == (void*)-1) {
-            fprintf(stderr, "shmat failed\n");
+            ERROR("shmat failed");
             exit(EXIT_FAILURE);
         }
         GIM_mem[i] = static_cast<uint8_t*>(result);
         // bind to numa 0
 
         if (mlock(GIM_mem[i], GIM_SIZE) != 0) {
-            printf("mlock faid\n");
+            ERROR("mlock faid");
         }
         const unsigned long mask = i + 1;
         if (mbind((void*)GIM_mem[i], GIM_SIZE, MPOL_BIND, &mask, 64, 0) != 0) {
-            printf("mbind failed\n");
+            ERROR("mbind faid");
         }
-        printf("mbind success\n");
+        DEBUG("mbind success");
         this->gim_size[i] = GIM_SIZE;
         this->gim_offset[i] = 0;
     }
@@ -62,14 +64,68 @@ CXL_SHM::CXL_SHM(int num_hosts, int host_id, size_t cxl_shm_size, size_t gim_siz
     // bind to numa 0
 
     if (mlock(CXL_shm, GIM_SIZE) != 0) {
-        printf("mlock faid\n");
+        ERROR("mlock faid");
     }
     const unsigned long mask = 1;
     if (mbind((void*)CXL_shm, cxl_shm_size, MPOL_BIND, &mask, 64, 0) != 0) {
-        printf("mbind failed\n");
+        ERROR("mbind faid");
     }
     // printf("mbind success\n");
     DEBUG("CXL_SHM init success");
+
+    /* mmap version */
+    // for (int i = 0; i < num_hosts * SNC; i++) {
+    //     std::string base_path = "/sharenvme/usershome/shs/cxlmem/numa";
+    //     std::string full_path = base_path + std::to_string(i);
+    //     int shmfd = open(full_path.c_str(), O_RDWR, S_IRUSR | S_IWUSR);
+    //     if (shmfd == -1) {
+    //         ERROR("Failed to open {}", full_path);
+    //         return ;
+    //     }
+    //     const int mmap_port = PROT_READ | PROT_WRITE;
+    //     const int mmap_flags = MAP_SHARED;
+    //     uint8_t* shm_buf = (uint8_t*)mmap(NULL, GIM_SIZE, mmap_port, mmap_flags, shmfd, 0);
+    //     if (shm_buf == nullptr || shm_buf == MAP_FAILED) {
+    //         ERROR("Failed to mmap {}", full_path);
+    //         ERROR("errno : {}", strerror(errno));
+    //         exit(-1);
+    //     }
+    //     GIM_mem[i] = static_cast<uint8_t*>(shm_buf);
+    //     if (mlock(GIM_mem[i], GIM_SIZE) != 0) {
+    //         printf("mlock faid\n");
+    //     }
+    //     const unsigned long mask = i + 1;
+    //     if (mbind((void*)GIM_mem[i], GIM_SIZE, MPOL_BIND, &mask, 64, 0) != 0) {
+    //         printf("mbind failed\n");
+    //     }
+    //     printf("mbind success\n");
+    //     this->gim_size[i] = GIM_SIZE;
+    //     this->gim_offset[i] = 0;
+    // }
+    // // cxl_shm_mem init
+    // std::string cxlshm_path = "/sharenvme/usershome/shs/cxlmem/cxlshm";
+    // int shmfd = open(cxlshm_path.c_str(), O_RDWR, S_IRUSR | S_IWUSR);
+    // if (shmfd == -1) {
+    //     ERROR("Failed to open {}", cxlshm_path);
+    //     return;
+    // }
+    // const int mmap_port = PROT_READ | PROT_WRITE;
+    // const int mmap_flags = MAP_SHARED;
+    // uint8_t* shm_buf = (uint8_t*)mmap(NULL, GIM_SIZE, mmap_port, mmap_flags, shmfd, 0);
+    // if (shm_buf == nullptr || shm_buf == MAP_FAILED) {
+    //     ERROR("Failed to mmap {}", cxlshm_path);
+    //     ERROR("errno : {}", strerror(errno));
+    //     exit(-1);
+    // }
+    // CXL_shm = static_cast<uint8_t*>(shm_buf);
+    // if (mlock(CXL_shm, GIM_SIZE) != 0) {
+    //     printf("mlock faid\n");
+    // }
+    // const unsigned long mask = 1;
+    // if (mbind((void*)CXL_shm, cxl_shm_size, MPOL_BIND, &mask, 64, 0) != 0) {
+    //     printf("mbind failed\n");
+    // }
+    // DEBUG("CXL_SHM init success");
 }
 
 CXL_SHM::~CXL_SHM() {
@@ -79,7 +135,7 @@ CXL_SHM::~CXL_SHM() {
     if (host_id == 0) {
         for (int i = 0; i < num_hosts + 1; i++) {
             if (shmctl(shmid[i], IPC_RMID, 0) == -1) {
-                printf("shmctl(IPC_RMID) failed\n");
+                DEBUG("shmctl(IPC_RMID) failed");
                 exit(EXIT_FAILURE);
             }
         }

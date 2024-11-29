@@ -16,13 +16,14 @@
 #include <sys/shm.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <numa.h>
 #pragma once
 
 #define GIM_SIZE 1LL * 1024 * 1024 * 1024
 #define CXL_SHM_SIZE 1LL * 1024 * 1024 * 1024
 #define GIM_LATENCY 300
 #define CACHE_LINE_SIZE 64
-#define SNC 2
+#define SNC 1
 
 class CXL_SHM {
 private:

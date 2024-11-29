@@ -133,8 +133,6 @@ int main(int argc, char** argv) {
             }
         }
     }
-    printf("a\n");
-
     for (size_t i = 0; i < world_size; i++) {
         for (size_t j = 0; j < world_size; j++) {
 #pragma omp parallel for
@@ -144,7 +142,6 @@ int main(int argc, char** argv) {
             }
         }
     }
-    printf("a\n");
     MPI_Barrier(MPI_COMM_WORLD);
     std::thread send_thread([&]() {
         for (int step = 1; step < world_size; step++) {   //遍历host
@@ -172,5 +169,7 @@ int main(int argc, char** argv) {
             }
         }
     }
+    MPI_Barrier(MPI_COMM_WORLD);
     printf("partition: %d,fault count:%ld\n", world_rank, count);
+    MPI_Finalize();
 }

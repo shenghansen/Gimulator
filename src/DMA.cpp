@@ -89,7 +89,6 @@ int hl_DMA::sync() {
     while (remaining_size > 0) {
         size_t current_transfer_size =
             (remaining_size > max_dma_size) ? max_dma_size : remaining_size;
-            INFO("current_transfer_size:{}",current_transfer_size);
         if (__hl_batch_memcpy_sync(source + offset, destination + offset, current_transfer_size))
             return 1;
         remaining_size -= current_transfer_size;
