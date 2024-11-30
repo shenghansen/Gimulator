@@ -11,7 +11,7 @@
 
 
 int main(int argc, char** argv) {
-    spdlog::set_level(spdlog::level::debug);
+    // spdlog::set_level(spdlog::level::debug);
     /* single process test */
     //     CXL_SHM cxl(1, 0);
     //     GIM_comm comm(cxl);
@@ -157,6 +157,11 @@ int main(int argc, char** argv) {
                               i,
                               0,
                               recv_buffer[i][world_rank][s_i]);
+                              if (world_rank==0)
+                              {
+                                printf("send %ld\n",s_i);
+                              }
+                              
             }
         }
     });
@@ -165,6 +170,9 @@ int main(int argc, char** argv) {
             int i = (world_rank + step) % world_size;
             for (size_t s_i = 0; s_i < NUMA; s_i++) {
                 comm.GIM_Recv(SIZE * sizeof(size_t), i, 0);
+                if (world_rank == 0) {
+                    printf("recv %ld\n", s_i);
+                }
             }
         }
     });

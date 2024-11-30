@@ -27,7 +27,7 @@ public:
     // size_t size();
     int get();
     int push(queue_element element);
-    bool pop(int index);
+    bool pop(int i);
     queue();
 };
 
@@ -47,37 +47,8 @@ public:
     // bool GIM_Send(uint8_t* source, size_t size, int destination_id, int tag,size_t*** recv_buffer
     // );
     bool GIM_Send(void* source, size_t size, int destination_id, int tag,
-                  void* destination) {
-        int index = send_queue[host_id]->get();
-        send_queue[host_id]->data[index].size = size;
-        send_queue[host_id]->data[index].id = destination_id;
-        send_queue[host_id]->data[index].tag = tag;
-        send_queue[host_id]->data[index].working_flag = 0;
-        DEBUG("host {} push send ,index{}", host_id, index);
-        // memcpy(recv_buffer[host_id][socket], source, size);
-        // hl_DMA_memcpy(
-        //     source, reinterpret_cast<uint8_t*>(recv_buffer[host_id][socket]), size, host_id *
-        //     SNC);
-        int numa_id = host_id*SNC;
-        int numas = numa_num_configured_nodes();
-        if (host_id >= numas) {
-            numa_id = host_id % numas*SNC;
-        }
-        hl_DMA dma(reinterpret_cast<uint8_t*> (source),
-                   reinterpret_cast<uint8_t*>(destination),
-                   size,
-                   numa_id);
-        dma.sync();
-        send_queue[host_id]->data[index].working_flag = 1;
-        bool flag = true;
-        while (flag) {
-            if (send_queue[host_id]->data[index].working_flag == 2) {
-                flag = false;
-            }
-        }
-        send_queue[host_id]->pop(index);
-        DEBUG("host {}send end", host_id);
-        return true;
-    }
+                  void* destination) ;
     bool GIM_Recv(size_t size, int source_id, int tag);   // index means socket
+    bool GIM_Probe(int source_id,int tag);
+    bool GIM_Get_count(int source_id, int tag,size_t& size);
 };
