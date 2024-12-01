@@ -19,7 +19,7 @@
 #include <numa.h>
 #pragma once
 
-#define GIM_SIZE 1LL * 1024 * 1024 * 1024
+#define GIM_SIZE 17uLL * 1024 * 1024 * 1024
 #define CXL_SHM_SIZE 1LL * 1024 * 1024 * 1024
 #define GIM_LATENCY 300
 #define CACHE_LINE_SIZE 64

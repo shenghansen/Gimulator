@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <mutex>
 #pragma once
-#define CAP 100
+#define CAP 100000
 
 // #define SNC 2
 

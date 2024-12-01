@@ -65,18 +65,16 @@ bool GIM_comm::GIM_Send(void* source, size_t size, int destination_id, int tag, 
     send_queue[host_id]->data[index].id = destination_id;
     send_queue[host_id]->data[index].tag = tag;
     DEBUG("host {} push send ,index{}", host_id, index);
-    memcpy(destination, source, size);
-    // hl_DMA_memcpy(
-    //     source, reinterpret_cast<uint8_t*>(recv_buffer[host_id][socket]), size, host_id *
-    //     SNC);
+    // memcpy(destination, source, size);
+
     int numa_id = host_id * SNC;
     int numas = numa_num_configured_nodes();
     if (host_id >= numas) {
         numa_id = host_id % numas * SNC;
     }
-    // hl_DMA dma(
-    //     reinterpret_cast<uint8_t*>(source), reinterpret_cast<uint8_t*>(destination), size, numa_id);
-    // dma.sync();
+    hl_DMA dma(
+        reinterpret_cast<uint8_t*>(source), reinterpret_cast<uint8_t*>(destination), size, numa_id);
+    dma.sync();
     send_queue[host_id]->data[index].working_flag.store(1);
     bool flag = true;
     while (flag) {

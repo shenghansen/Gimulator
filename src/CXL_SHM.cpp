@@ -12,17 +12,17 @@
 #include <sys/types.h>
 
 CXL_SHM::CXL_SHM(int num_hosts, int host_id, size_t cxl_shm_size, size_t gim_size) {
-    this->gim_size = new size_t[num_hosts*SNC];
+    this->gim_size = new size_t[num_hosts * SNC];
     this->cxl_shm_size = cxl_shm_size;
     CXL_shm = new uint8_t[cxl_shm_size];
-    GIM_mem = new uint8_t*[num_hosts*SNC];
-    gim_offset = new std::atomic_uint64_t[num_hosts*SNC];
+    GIM_mem = new uint8_t*[num_hosts * SNC];
+    gim_offset = new std::atomic_uint64_t[num_hosts * SNC];
     this->num_hosts = num_hosts;
     this->host_id = host_id;
-    this->shmid = new int[num_hosts*SNC + 1];
+    this->shmid = new int[num_hosts * SNC + 1];
     /* shm version */
     // gim_mem init
-    for (int i = 0; i < num_hosts*SNC; i++) {
+    for (int i = 0; i < num_hosts * SNC; i++) {
         shmid[i] = shmget((key_t)i + 1, GIM_SIZE, 0666 | IPC_CREAT);
         if (shmid[i] == -1) {
             ERROR("shmat failed");
@@ -49,8 +49,8 @@ CXL_SHM::CXL_SHM(int num_hosts, int host_id, size_t cxl_shm_size, size_t gim_siz
         this->gim_offset[i] = 0;
     }
     // cxl_shm_mem init
-    shmid[num_hosts] = shmget((key_t)256, cxl_shm_size, 0666 | IPC_CREAT);
-    if (shmid[num_hosts] == -1) {
+    shmid[num_hosts * SNC] = shmget((key_t)256, cxl_shm_size, 0666 | IPC_CREAT);
+    if (shmid[num_hosts * SNC] == -1) {
         fprintf(stderr, "shmat failed\n");
         exit(EXIT_FAILURE);
     }
@@ -66,10 +66,10 @@ CXL_SHM::CXL_SHM(int num_hosts, int host_id, size_t cxl_shm_size, size_t gim_siz
     if (mlock(CXL_shm, GIM_SIZE) != 0) {
         ERROR("mlock faid");
     }
-    const unsigned long mask = 1;
-    if (mbind((void*)CXL_shm, cxl_shm_size, MPOL_BIND, &mask, 64, 0) != 0) {
-        ERROR("mbind faid");
-    }
+    // const unsigned long mask = 1;
+    // if (mbind((void*)CXL_shm, cxl_shm_size, MPOL_BIND, &mask, 64, 0) != 0) {
+    //     ERROR("mbind faid");
+    // }
     // printf("mbind success\n");
     DEBUG("CXL_SHM init success");
 
@@ -129,13 +129,24 @@ CXL_SHM::CXL_SHM(int num_hosts, int host_id, size_t cxl_shm_size, size_t gim_siz
 }
 
 CXL_SHM::~CXL_SHM() {
-    for (int i = 0; i < num_hosts*SNC; i++) {
-        shmdt(GIM_mem[i]);
+    for (int i = 0; i < num_hosts * SNC; i++) {
+        if (munlock(GIM_mem[i], GIM_SIZE) != 0) {
+            ERROR("mlock faid");
+        }
+        if (shmdt(GIM_mem[i]) == -1) {
+            DEBUG("shmdt failed for segment {}", i);
+        }
+    }
+    if (munlock(CXL_shm, GIM_SIZE) != 0) {
+        ERROR("mlock faid");
+    }
+    if (shmdt(CXL_shm) == -1) {
+        DEBUG("shmdt failed for shm ");
     }
     if (host_id == 0) {
         for (int i = 0; i < num_hosts + 1; i++) {
             if (shmctl(shmid[i], IPC_RMID, 0) == -1) {
-                DEBUG("shmctl(IPC_RMID) failed");
+                DEBUG("shmctl(IPC_RMID) failed for segment {}: {}", i, strerror(errno));
                 exit(EXIT_FAILURE);
             }
         }
@@ -153,7 +164,7 @@ uint8_t* CXL_SHM::GIM_malloc(size_t size, int id) {
     } else {
         size = 64 * ((size + 63) / 64);
     }
-    int real_numa = id*SNC;
+    int real_numa = id * SNC;
     uint64_t old_offset = gim_offset[real_numa].fetch_add(size);
     uint64_t new_offset = old_offset + size;
     if (new_offset > gim_size[real_numa]) {
@@ -175,14 +186,14 @@ void CXL_SHM::GIM_free(uint8_t* ptr, int id) {
     // FIXME: real mempoll not native
     return;
 }
-uint8_t* CXL_SHM::GIM_malloc(size_t size, int id,int numa) {
-    DEBUG("cxl malloc size  {} on numa {}", size, id*SNC+numa);
+uint8_t* CXL_SHM::GIM_malloc(size_t size, int id, int numa) {
+    DEBUG("cxl malloc size  {} on numa {}", size, id * SNC + numa);
     if (size < 64) {
         size = 64;
     } else {
         size = 64 * ((size + 63) / 64);
     }
-    int real_numa = id * SNC+numa;
+    int real_numa = id * SNC + numa;
     uint64_t old_offset = gim_offset[real_numa].fetch_add(size);
     uint64_t new_offset = old_offset + size;
     if (new_offset > gim_size[real_numa]) {
@@ -192,7 +203,7 @@ uint8_t* CXL_SHM::GIM_malloc(size_t size, int id,int numa) {
     return GIM_mem[real_numa] + old_offset;
 }
 
-void CXL_SHM::GIM_free(uint8_t* ptr, int id,int numa) {
+void CXL_SHM::GIM_free(uint8_t* ptr, int id, int numa) {
     if (ptr == nullptr) {
         return;
     }
