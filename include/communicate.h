@@ -42,13 +42,12 @@ class GIM_comm {
 
 public:
     GIM_comm(CXL_SHM* cxl_shm);
-    ~GIM_comm();
+    // ~GIM_comm();
 
     // bool GIM_Send(uint8_t* source, size_t size, int destination_id, int tag,size_t*** recv_buffer
     // );
-    bool GIM_Send(void* source, size_t size, int destination_id, int tag,
-                  void* destination) ;
+    bool GIM_Send(void* source, size_t size, int destination_id, int tag, void* destination);
     bool GIM_Recv(size_t size, int source_id, int tag);   // index means socket
-    bool GIM_Probe(int source_id,int tag);
-    bool GIM_Get_count(int source_id, int tag,size_t& size);
+    bool GIM_Probe(int source_id, int tag);
+    bool GIM_Get_count(int source_id, int tag, int& size);
 };

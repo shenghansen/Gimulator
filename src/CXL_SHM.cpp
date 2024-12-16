@@ -17,6 +17,7 @@ CXL_SHM::CXL_SHM(int num_hosts, int host_id, size_t cxl_shm_size, size_t gim_siz
     CXL_shm = new uint8_t[cxl_shm_size];
     GIM_mem = new uint8_t*[num_hosts * SNC];
     gim_offset = new std::atomic_uint64_t[num_hosts * SNC];
+    this->shm_offset = 0;
     this->num_hosts = num_hosts;
     this->host_id = host_id;
     this->shmid = new int[num_hosts * SNC + 1];
@@ -37,13 +38,13 @@ CXL_SHM::CXL_SHM(int num_hosts, int host_id, size_t cxl_shm_size, size_t gim_siz
         GIM_mem[i] = static_cast<uint8_t*>(result);
         // bind to numa 0
 
-        if (mlock(GIM_mem[i], GIM_SIZE) != 0) {
-            ERROR("mlock faid");
-        }
-        const unsigned long mask = i + 1;
-        if (mbind((void*)GIM_mem[i], GIM_SIZE, MPOL_BIND, &mask, 64, 0) != 0) {
-            ERROR("mbind faid");
-        }
+        // if (mlock(GIM_mem[i], GIM_SIZE) != 0) {
+        //     ERROR("mlock faid");
+        // }
+        // const unsigned long mask = i + 1;
+        // if (mbind((void*)GIM_mem[i], GIM_SIZE, MPOL_BIND, &mask, 64, 0) != 0) {
+        //     ERROR("mbind faid");
+        // }
         DEBUG("mbind success");
         this->gim_size[i] = GIM_SIZE;
         this->gim_offset[i] = 0;
@@ -54,8 +55,7 @@ CXL_SHM::CXL_SHM(int num_hosts, int host_id, size_t cxl_shm_size, size_t gim_siz
         fprintf(stderr, "shmat failed\n");
         exit(EXIT_FAILURE);
     }
-    void* result = shmat(shmid[num_hosts], NULL, 0);
-
+    void* result = shmat(shmid[num_hosts * SNC], NULL, 0);
     if (result == (void*)-1) {
         fprintf(stderr, "shmat failed\n");
         exit(EXIT_FAILURE);
@@ -63,9 +63,9 @@ CXL_SHM::CXL_SHM(int num_hosts, int host_id, size_t cxl_shm_size, size_t gim_siz
     CXL_shm = static_cast<uint8_t*>(result);
     // bind to numa 0
 
-    if (mlock(CXL_shm, GIM_SIZE) != 0) {
-        ERROR("mlock faid");
-    }
+    // if (mlock(CXL_shm, GIM_SIZE) != 0) {
+    //     ERROR("mlock faid");
+    // }
     // const unsigned long mask = 1;
     // if (mbind((void*)CXL_shm, cxl_shm_size, MPOL_BIND, &mask, 64, 0) != 0) {
     //     ERROR("mbind faid");
@@ -128,43 +128,60 @@ CXL_SHM::CXL_SHM(int num_hosts, int host_id, size_t cxl_shm_size, size_t gim_siz
     // DEBUG("CXL_SHM init success");
 }
 
-CXL_SHM::~CXL_SHM() {
-    for (int i = 0; i < num_hosts * SNC; i++) {
-        if (munlock(GIM_mem[i], GIM_SIZE) != 0) {
-            ERROR("mlock faid");
-        }
-        if (shmdt(GIM_mem[i]) == -1) {
-            DEBUG("shmdt failed for segment {}", i);
-        }
-    }
-    if (munlock(CXL_shm, GIM_SIZE) != 0) {
-        ERROR("mlock faid");
-    }
-    if (shmdt(CXL_shm) == -1) {
-        DEBUG("shmdt failed for shm ");
-    }
-    if (host_id == 0) {
-        for (int i = 0; i < num_hosts + 1; i++) {
-            if (shmctl(shmid[i], IPC_RMID, 0) == -1) {
-                DEBUG("shmctl(IPC_RMID) failed for segment {}: {}", i, strerror(errno));
-                exit(EXIT_FAILURE);
-            }
-        }
-    }
-    delete[] GIM_mem;
-    delete gim_offset;
-    delete gim_size;
-    delete shmid;
-}
+// CXL_SHM::~CXL_SHM() {
+//     for (int i = 0; i < num_hosts * SNC; i++) {
+//         // if (munlock(GIM_mem[i], GIM_SIZE) != 0) {
+//         //     ERROR("mlock faid");
+//         // }
+//         if (shmdt(GIM_mem[i]) == -1) {
+//             DEBUG("shmdt failed for segment {}", i);
+//         }
+//     }
+//     // if (munlock(CXL_shm, GIM_SIZE) != 0) {
+//     //     ERROR("mlock faid");
+//     // }
+//     if (shmdt(CXL_shm) == -1) {
+//         DEBUG("shmdt failed for shm ");
+//     }
+//     if (host_id == 0) {
+//         for (int i = 0; i < num_hosts + 1; i++) {
+//             if (shmctl(shmid[i], IPC_RMID, 0) == -1) {
+//                 DEBUG("shmctl(IPC_RMID) failed for segment {}: {}", i, strerror(errno));
+//                 exit(EXIT_FAILURE);
+//             }
+//         }
+//     }
+//     delete[] GIM_mem;
+//     delete gim_offset;
+//     delete gim_size;
+//     delete shmid;
+// }
 
 uint8_t* CXL_SHM::GIM_malloc(size_t size, int id) {
-    DEBUG("cxl malloc size  {} on numa {}", size, host_id);
+    // INFO("GIM malloc size  {} on host {} by {}", size, id*SNC,host_id);
     if (size < 64) {
         size = 64;
     } else {
         size = 64 * ((size + 63) / 64);
     }
     int real_numa = id * SNC;
+    uint64_t old_offset = gim_offset[real_numa].fetch_add(size);
+    uint64_t new_offset = old_offset + size;
+    if (new_offset > gim_size[real_numa]) {
+        ERROR("OOM ! GIM_mem reach the capacity limit");
+        return nullptr;
+    }
+    return GIM_mem[real_numa] + old_offset;
+}
+
+uint8_t* CXL_SHM::GIM_malloc(size_t size, int id, int numa) {
+    // INFO("GIM malloc size  {} on numa {} by {}", size, id * SNC + numa,host_id);
+    if (size < 64) {
+        size = 64;
+    } else {
+        size = 64 * ((size + 63) / 64);
+    }
+    int real_numa = id * SNC + numa;
     uint64_t old_offset = gim_offset[real_numa].fetch_add(size);
     uint64_t new_offset = old_offset + size;
     if (new_offset > gim_size[real_numa]) {
@@ -186,22 +203,6 @@ void CXL_SHM::GIM_free(uint8_t* ptr, int id) {
     // FIXME: real mempoll not native
     return;
 }
-uint8_t* CXL_SHM::GIM_malloc(size_t size, int id, int numa) {
-    DEBUG("cxl malloc size  {} on numa {}", size, id * SNC + numa);
-    if (size < 64) {
-        size = 64;
-    } else {
-        size = 64 * ((size + 63) / 64);
-    }
-    int real_numa = id * SNC + numa;
-    uint64_t old_offset = gim_offset[real_numa].fetch_add(size);
-    uint64_t new_offset = old_offset + size;
-    if (new_offset > gim_size[real_numa]) {
-        ERROR("OOM ! GIM_mem reach the capacity limit");
-        return nullptr;
-    }
-    return GIM_mem[real_numa] + old_offset;
-}
 
 void CXL_SHM::GIM_free(uint8_t* ptr, int id, int numa) {
     if (ptr == nullptr) {
@@ -217,7 +218,7 @@ void CXL_SHM::GIM_free(uint8_t* ptr, int id, int numa) {
 }
 
 uint8_t* CXL_SHM::CXL_SHM_malloc(size_t size) {
-    DEBUG("cxl malloc size  {} on numa {}", size, host_id);
+    // INFO("cxl malloc size  {} on host {}", size, host_id);
     if (size < 64) {
         size = 64;
     } else {
@@ -227,17 +228,17 @@ uint8_t* CXL_SHM::CXL_SHM_malloc(size_t size) {
     uint64_t old_offset = shm_offset.fetch_add(size);
     uint64_t new_offset = old_offset + size;
     if (new_offset > cxl_shm_size) {
-        ERROR("OOM ! GIM_mem reach the capacity limit");
+        ERROR("OOM ! CXL_SHM reach the capacity limit");
         return nullptr;
     }
-    return GIM_mem[host_id] + old_offset;
+    return CXL_shm + old_offset;
 }
 
 void CXL_SHM::CXL_SHM_free(uint8_t* ptr) {
     if (ptr == nullptr) {
         return;
     }
-    if (ptr < GIM_mem[host_id] || ptr > GIM_mem[host_id] + cxl_shm_size) {
+    if (ptr < CXL_shm || ptr > CXL_shm + cxl_shm_size) {
         ERROR("free invalid pointer");
         return;
     }

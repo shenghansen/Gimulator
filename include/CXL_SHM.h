@@ -6,6 +6,7 @@
 #include <fcntl.h>
 #include <immintrin.h>
 #include <linux/mman.h>
+#include <numa.h>
 #include <numaif.h>
 #include <smmintrin.h>
 #include <stddef.h>
@@ -16,11 +17,10 @@
 #include <sys/shm.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <numa.h>
 #pragma once
 
-#define GIM_SIZE 17uLL * 1024 * 1024 * 1024
-#define CXL_SHM_SIZE 1LL * 1024 * 1024 * 1024
+#define GIM_SIZE 128uLL * 1024 * 1024 * 1024
+#define CXL_SHM_SIZE 128LL * 1024 * 1024 * 1024
 #define GIM_LATENCY 300
 #define CACHE_LINE_SIZE 64
 #define SNC 1
@@ -40,15 +40,15 @@ public:
     int host_id;
     CXL_SHM(int num_hosts, int host_id, size_t cxl_shm_size = CXL_SHM_SIZE,
             size_t gim_size = GIM_SIZE);
-    ~CXL_SHM();
+    // ~CXL_SHM();
     uint8_t* GIM_malloc(size_t size, int id);
     void GIM_free(uint8_t* ptr, int id);
-    uint8_t* GIM_malloc(size_t size, int id,int numa);
-    void GIM_free(uint8_t* ptr, int id,int numa);
+    uint8_t* GIM_malloc(size_t size, int id, int numa);
+    void GIM_free(uint8_t* ptr, int id, int numa);
     uint8_t* CXL_SHM_malloc(size_t size);
     void CXL_SHM_free(uint8_t* ptr);
 
-    //还是不能load结构体
+    // 还是不能load结构体
     template<typename T> INLINE static T* load_gim(T* data, size_t index) {
         inject_latency_ns<GIM_LATENCY>();
         // TODO: change load size

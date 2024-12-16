@@ -40,24 +40,25 @@ GIM_comm::GIM_comm(CXL_SHM* cxl_shm)
     this->send_queue = new queue*[num_hosts];
     this->recv_queue = new queue*[num_hosts];
     // this->completed_queue = new queue*[num_hosts];
+
     for (size_t i = 0; i < num_hosts; i++) {
-        void* ptr = cxl_shm->GIM_malloc(sizeof(queue), i);
+        void* volatile ptr = cxl_shm->GIM_malloc(sizeof(queue), i);
         send_queue[i] = new (ptr) queue();
-        void* ptr2 = cxl_shm->GIM_malloc(sizeof(queue), i);
+        void* volatile ptr2 = cxl_shm->GIM_malloc(sizeof(queue), i);
         recv_queue[i] = new (ptr2) queue();
         // void* ptr3 = cxl_shm->GIM_malloc(sizeof(queue), i);
         // completed_queue[i] = new (ptr) queue();
     }
 }
 
-GIM_comm::~GIM_comm() {
-    for (size_t i = 0; i < num_hosts; i++) {
-        cxl_shm->GIM_free(reinterpret_cast<uint8_t*>(send_queue[i]), i);
-        cxl_shm->GIM_free(reinterpret_cast<uint8_t*>(recv_queue[i]), i);
-    }
-    delete[] send_queue;
-    delete[] recv_queue;
-}
+// GIM_comm::~GIM_comm() {
+//     for (size_t i = 0; i < num_hosts; i++) {
+//         cxl_shm->GIM_free(reinterpret_cast<uint8_t*>(send_queue[i]), i);
+//         cxl_shm->GIM_free(reinterpret_cast<uint8_t*>(recv_queue[i]), i);
+//     }
+//     delete[] send_queue;
+//     delete[] recv_queue;
+// }
 
 bool GIM_comm::GIM_Send(void* source, size_t size, int destination_id, int tag, void* destination) {
     int index = send_queue[host_id]->get();
@@ -65,16 +66,18 @@ bool GIM_comm::GIM_Send(void* source, size_t size, int destination_id, int tag, 
     send_queue[host_id]->data[index].id = destination_id;
     send_queue[host_id]->data[index].tag = tag;
     DEBUG("host {} push send ,index{}", host_id, index);
-    // memcpy(destination, source, size);
+
 
     int numa_id = host_id * SNC;
     int numas = numa_num_configured_nodes();
     if (host_id >= numas) {
         numa_id = host_id % numas * SNC;
     }
-    hl_DMA dma(
-        reinterpret_cast<uint8_t*>(source), reinterpret_cast<uint8_t*>(destination), size, numa_id);
-    dma.sync();
+    memcpy(destination, source, size);
+    // hl_DMA dma(
+    //     reinterpret_cast<uint8_t*>(source), reinterpret_cast<uint8_t*>(destination), size,
+    //     numa_id);
+    // dma.sync();
     send_queue[host_id]->data[index].working_flag.store(1);
     bool flag = true;
     while (flag) {
@@ -111,26 +114,6 @@ bool GIM_comm::GIM_Recv(size_t size, int source_id, int tag) {
     return true;
 }
 
-// bool GIM_comm::GIM_Recv(size_t size, int source_id, int tag) {
-//     bool flag = true;
-//     while (flag) {
-//         for (size_t i=0;i<CAP;i++) {
-//             if (send_queue[source_id]->data[i].working_flag.load() != -1 &&
-//                 send_queue[source_id]->data[i].id == host_id &&
-//                 send_queue[source_id]->data[i].size == size) { DEBUG("recv {} find send",
-//                 host_id); while (flag) {
-//                     if ( send_queue[source_id]->data[i].working_flag.load() == 1) {
-//                          send_queue[source_id]->data[i].working_flag.store(2);
-//                         flag = false;
-//                     }
-//                 }
-//                 break;
-//             }
-//         }
-//     }
-//     DEBUG("recv end");
-//     return true;
-// }
 
 bool GIM_comm::GIM_Probe(int source_id, int tag) {
     bool flag = true;
@@ -147,7 +130,7 @@ bool GIM_comm::GIM_Probe(int source_id, int tag) {
     return true;
 }
 
-bool GIM_comm::GIM_Get_count(int source_id, int tag, size_t& size) {
+bool GIM_comm::GIM_Get_count(int source_id, int tag, int& size) {
     bool flag = true;
     while (flag) {
         for (auto& q : send_queue[source_id]->data) {

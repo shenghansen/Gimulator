@@ -77,7 +77,7 @@ int hl_DMA::__hl_batch_memcpy_async(uint8_t* source, uint8_t* destination, size_
     handlers.emplace_back(
         std::make_unique<dml::handler<dml::batch_operation, std::allocator<std::uint8_t>>>(
             dml::submit<dml::hardware>(
-                dml::batch, *sequence, dml::default_execution_interface<dml::automatic>(),numa)));
+                dml::batch, *sequence, dml::default_execution_interface<dml::automatic>(), numa)));
     return 0;
 }
 
@@ -165,8 +165,8 @@ int _batch_memcpy(uint8_t* source, uint8_t* destination, size_t size, u_int32_t 
     // dml_job_ptr->flags = DML_FLAG_BLOCK_ON_FAULT;
 
 
-        // begin batch set
-        size_t buffer_size = size / BATCH_SIZE;
+    // begin batch set
+    size_t buffer_size = size / BATCH_SIZE;
     size_t remainder = size % BATCH_SIZE;
     for (size_t i = 0; i < BATCH_SIZE - 1; i++) {
         status = dml_batch_set_mem_move_by_index(dml_job_ptr,
@@ -332,7 +332,7 @@ int _batch_memcpy_asynchronous_check(dml_job_t** dml_job_ptr) {
     case 0: INFO("DML_STATUS_OK."); break;
     case 2: INFO("DML_STATUS_BEING_PROCESSED."); break;
     case 23: INFO("DML_STATUS_JOB_CORRUPTED."); return 1;
-    default : INFO("DML_STATUS_OTHER."); return 1;
+    default: INFO("DML_STATUS_OTHER."); return 1;
     }
     return 0;
 }
@@ -468,12 +468,12 @@ int hl_DMA_memcpy_async_test(uint8_t* source, uint8_t* destination, size_t size,
 
 int hl_DMA_memcpy(uint8_t* source, uint8_t* destination, size_t size, u_int32_t numa) {
     auto result = dml::execute<dml::hardware>(
-        dml::mem_move, dml::make_view(source, size), dml::make_view(source, size),numa);
+        dml::mem_move, dml::make_view(source, size), dml::make_view(source, size), numa);
 
     if (result.status == dml::status_code::ok) {
         INFO("Finished successfully.");
     } else {
-       ERROR("Failure occurred.");
+        ERROR("Failure occurred.");
         return 1;
     }
     return 0;
