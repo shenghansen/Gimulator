@@ -67,7 +67,7 @@ int main(int argc, char** argv) {
         for (int step = 1; step < world_size; step++) {   //遍历host
             int i = (world_rank + step) % world_size;
             comm.GIM_Probe(i,0);
-            size_t comm_size=0;
+            int comm_size=0;
             comm.GIM_Get_count(i,0,comm_size);
             for (size_t s_i = 0; s_i < NUMA; s_i++) {
                 comm.GIM_Recv(comm_size, i, 0);
