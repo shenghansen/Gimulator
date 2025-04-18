@@ -41,10 +41,10 @@ CXL_SHM::CXL_SHM(int num_hosts, int host_id, size_t cxl_shm_size, size_t gim_siz
         // if (mlock(GIM_mem[i], GIM_SIZE) != 0) {
         //     ERROR("mlock faid");
         // }
-        // const unsigned long mask = i + 1;
-        // if (mbind((void*)GIM_mem[i], GIM_SIZE, MPOL_BIND, &mask, 64, 0) != 0) {
-        //     ERROR("mbind faid");
-        // }
+        const unsigned long mask = 1<<i;
+        if (mbind((void*)GIM_mem[i], GIM_SIZE, MPOL_BIND, &mask, 64, 0) != 0) {
+            ERROR("mbind faid");
+        }
         DEBUG("mbind success");
         this->gim_size[i] = GIM_SIZE;
         this->gim_offset[i] = 0;

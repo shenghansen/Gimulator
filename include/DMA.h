@@ -25,8 +25,15 @@ using namespace std::chrono;
 // TODO: Beter Strategy
 //  DML_MIN_BATCH_SIZE is 4u
 #define BATCH_SIZE 8u
+// #define BATCH_SIZE 16u
+// #define BATCH_SIZE 4u
 // #define BATCH_SIZE 1u
-#define MAX_TRANSFER_SIZE 268435456u
+// #define MAX_TRANSFER_SIZE 268435456u
+// 实测下来一次传输最大就是2^20，2^21也有可能，但是一定在2^22之下
+// #define MAX_TRANSFER_SIZE 2097152
+#define MAX_TRANSFER_SIZE 1048576
+// #define MAX_TRANSFER_SIZE 524288
+// #define MAX_TRANSFER_SIZE 262144
 // #define MAX_TRANSFER_SIZE 4096u
 #define MAX_DMA_SIZE BATCH_SIZE* MAX_TRANSFER_SIZE
 
@@ -45,6 +52,7 @@ private:
 
     int __hl_batch_memcpy_sync(uint8_t* source, uint8_t* destination, size_t size);
     int __hl_batch_memcpy_async(uint8_t* source, uint8_t* destination, size_t size);
+    int __hl_batch_memcpy_sync_fixed(uint8_t* source, uint8_t* destination, size_t size);
 
 public:
     hl_DMA(uint8_t* source, uint8_t* destination, size_t total_size, int numa)

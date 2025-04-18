@@ -8,6 +8,7 @@ int hl_DMA::__hl_batch_memcpy_sync(uint8_t* source, uint8_t* destination, size_t
     // begin batch set
     size_t buffer_size = size / batchsize;
     size_t remainder = size % batchsize;
+    // printf("buffersize is %d, remainder is %d\n",buffer_size,remainder);
     for (size_t i = 0; i < batchsize - 1; i++) {
         status = sequence.add(dml::mem_move,
                               dml::make_view(source + i * buffer_size, buffer_size),
@@ -41,6 +42,88 @@ int hl_DMA::__hl_batch_memcpy_sync(uint8_t* source, uint8_t* destination, size_t
     return 0;
 }
 
+int hl_DMA::__hl_batch_memcpy_sync_fixed(uint8_t* source, uint8_t* destination, size_t size) {
+    dml::status_code status;
+
+    // begin batch set
+    size_t buffer_size = size / 4;
+    if (size <= 1442296) {
+        auto result = dml::execute<dml::hardware>(
+            dml::mem_move, dml::make_view(source, size), dml::make_view(destination, size));
+        if (result.status != dml::status_code::ok) {
+            ERROR("An error {} occurred during final job execution.",
+                  static_cast<int>(result.status));
+            ERROR("the size is {}.", size);
+            return 1;
+        }
+        // INFO("the size is {}.", size);
+        return 0;
+    }
+    unsigned int transfer_size = max_transfer_size;
+    if (buffer_size < max_transfer_size) {//介于两者之间，比如正好是2 max_transfer_size
+        transfer_size = size / batchsize;
+    }
+    int bs = (size % transfer_size) ? size / transfer_size + 1 : size / transfer_size;
+
+    auto sequence = dml::sequence(bs, std::allocator<dml::byte_t>());
+    int i = 0;
+    size_t remaining_size = size;
+    while (remaining_size > transfer_size) {
+        status = sequence.add(dml::mem_move,
+                              dml::make_view(source + i * transfer_size, transfer_size),
+                              dml::make_view(destination + i * transfer_size, transfer_size));
+        if (status != dml::status_code::ok) {
+            ERROR("An error {} occurred during setting of batch operation 1.",
+                  static_cast<int>(status));
+            return 1;
+        }
+        remaining_size -= transfer_size;
+        i++;
+    }
+
+    status = sequence.add(dml::mem_move,
+                          dml::make_view(source + i * transfer_size, remaining_size),
+                          dml::make_view(destination + i * transfer_size, remaining_size));
+    if (status != dml::status_code::ok) {
+        ERROR("An error {} occurred during setting of batch operation 2.",
+              static_cast<int>(status));
+        return 1;
+    }
+
+
+    // for (size_t i = 0; i < 3; i++) {
+    //     status = sequence.add(dml::mem_move,
+    //                           dml::make_view(source + i * buffer_size, buffer_size),
+    //                           dml::make_view(destination + i * buffer_size, buffer_size));
+    //     if (status != dml::status_code::ok) {
+    //         ERROR("An error {} occurred during setting of batch operation 1.",
+    //               static_cast<int>(status));
+    //         return 1;
+    //     }
+    // }
+
+    // status = sequence.add(dml::mem_move,
+    //                       dml::make_view(source + 3 * buffer_size, buffer_size + remainder),
+    //                       dml::make_view(destination + 3 * buffer_size, buffer_size +
+    //                       remainder));
+    // if (status != dml::status_code::ok) {
+    //     ERROR("An error {} occurred during setting of batch operation 2.",
+    //           static_cast<int>(status));
+    //     return 1;
+    // }
+
+    // execute
+    auto result = dml::execute<dml::hardware>(dml::batch, sequence, numa);
+    if (result.status != dml::status_code::ok) {
+        ERROR("An error {} occurred during job execution {}.",
+              static_cast<int>(result.status),
+              static_cast<int>(result.operations_completed));
+        ERROR("sequence num is {}.", i + 1);
+        return 1;
+    }
+    DEBUG("Batch Memcpy Completed Successfully.");
+    return 0;
+}
 
 
 
@@ -89,7 +172,14 @@ int hl_DMA::sync() {
     while (remaining_size > 0) {
         size_t current_transfer_size =
             (remaining_size > max_dma_size) ? max_dma_size : remaining_size;
-        if (__hl_batch_memcpy_sync(source + offset, destination + offset, current_transfer_size))
+        // if (__hl_batch_memcpy_sync(source + offset, destination + offset, current_transfer_size))
+        //     return 1;
+        if (current_transfer_size == max_dma_size &&
+            __hl_batch_memcpy_sync(source + offset, destination + offset, current_transfer_size))
+            return 1;
+        if (current_transfer_size != max_dma_size &&
+            __hl_batch_memcpy_sync_fixed(
+                source + offset, destination + offset, current_transfer_size))
             return 1;
         remaining_size -= current_transfer_size;
         offset += current_transfer_size;
@@ -417,7 +507,7 @@ int hl_DMA_memcpy_sync_test(uint8_t* source, uint8_t* destination, size_t size, 
     if (hl_dma_sync.sync()) {
         return 1;
     };
-
+    // INFO("size is {}.",size);
 #ifdef STATISTICS
     auto end = system_clock::now();
     auto duration = duration_cast<microseconds>(end - start);
@@ -471,7 +561,7 @@ int hl_DMA_memcpy(uint8_t* source, uint8_t* destination, size_t size, u_int32_t 
         dml::mem_move, dml::make_view(source, size), dml::make_view(source, size), numa);
 
     if (result.status == dml::status_code::ok) {
-        INFO("Finished successfully.");
+        // INFO("Finished successfully.");
     } else {
         ERROR("Failure occurred.");
         return 1;
@@ -504,6 +594,7 @@ int ll_DMA_memcpy(uint8_t* source, uint8_t* destination, size_t size, u_int32_t 
     status = dml_execute_job(dml_job_ptr, DML_WAIT_MODE_BUSY_POLL);
     if (DML_STATUS_OK != status) {
         printf("An error (%u) occurred during job execution.\n", status);
+        // printf("the job size is %d\n",size);
         dml_finalize_job(dml_job_ptr);
         free(dml_job_ptr);
         return 1;
@@ -516,6 +607,6 @@ int ll_DMA_memcpy(uint8_t* source, uint8_t* destination, size_t size, u_int32_t 
     }
     free(dml_job_ptr);
 
-    printf("Job Completed Successfully.\n");
+    // printf("Job Completed Successfully.\n");
     return 0;
 }
