@@ -41,7 +41,7 @@ CXL_SHM::CXL_SHM(int num_hosts, int host_id, size_t cxl_shm_size, size_t gim_siz
         // if (mlock(GIM_mem[i], GIM_SIZE) != 0) {
         //     ERROR("mlock faid");
         // }
-        const unsigned long mask = 1<<i;
+        const unsigned long mask = 1UL << i;
         if (mbind((void*)GIM_mem[i], GIM_SIZE, MPOL_BIND, &mask, 64, 0) != 0) {
             ERROR("mbind faid");
         }
@@ -66,10 +66,10 @@ CXL_SHM::CXL_SHM(int num_hosts, int host_id, size_t cxl_shm_size, size_t gim_siz
     // if (mlock(CXL_shm, GIM_SIZE) != 0) {
     //     ERROR("mlock faid");
     // }
-    // const unsigned long mask = 1;
-    // if (mbind((void*)CXL_shm, cxl_shm_size, MPOL_BIND, &mask, 64, 0) != 0) {
-    //     ERROR("mbind faid");
-    // }
+    const unsigned long mask = 1UL << 4;
+    if (mbind((void*)CXL_shm, cxl_shm_size, MPOL_BIND, &mask, 64, 0) != 0) {
+        ERROR("mbind faid");
+    }
     // printf("mbind success\n");
     DEBUG("CXL_SHM init success");
 
