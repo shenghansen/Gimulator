@@ -8,6 +8,7 @@
 #include "CXL_SHM.h"
 #include "utills.hpp"
 #include <cstddef>
+#include <cstdio>
 #include <string>
 #include <sys/types.h>
 
@@ -43,7 +44,7 @@ CXL_SHM::CXL_SHM(int num_hosts, int host_id, size_t cxl_shm_size, size_t gim_siz
         // }
         const unsigned long mask = 1UL << i;
         if (mbind((void*)GIM_mem[i], GIM_SIZE, MPOL_BIND, &mask, 64, 0) != 0) {
-            ERROR("mbind faid");
+            printf("mbind faid");
         }
         DEBUG("mbind success");
         this->gim_size[i] = GIM_SIZE;
@@ -66,13 +67,23 @@ CXL_SHM::CXL_SHM(int num_hosts, int host_id, size_t cxl_shm_size, size_t gim_siz
     // if (mlock(CXL_shm, GIM_SIZE) != 0) {
     //     ERROR("mlock faid");
     // }
+#ifdef CXL
     const unsigned long mask = 1UL << 4;
     if (mbind((void*)CXL_shm, cxl_shm_size, MPOL_BIND, &mask, 64, 0) != 0) {
+        printf("mbind faid");
+    }
+    // printf("mbind cxl success\n");
+    DEBUG("CXL_SHM init success");
+#else
+    unsigned long numa_node_mask = 0;
+    numa_node_mask |= (1UL << 0);   // 绑定到 NUMA 节点 0
+    numa_node_mask |= (1UL << 1);   // 绑定到 NUMA 节点 1
+    numa_node_mask |= (1UL << 2);   // 绑定到 NUMA 节点 2
+    numa_node_mask |= (1UL << 3);   // 绑定到 NUMA 节点 3
+    if (mbind((void*)CXL_shm, cxl_shm_size, MPOL_BIND, &numa_node_mask, 64, 0) != 0) {
         ERROR("mbind faid");
     }
-    // printf("mbind success\n");
-    DEBUG("CXL_SHM init success");
-
+#endif
     /* mmap version */
     // for (int i = 0; i < num_hosts * SNC; i++) {
     //     std::string base_path = "/sharenvme/usershome/shs/cxlmem/numa";

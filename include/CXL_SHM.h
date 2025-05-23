@@ -20,7 +20,7 @@
 #pragma once
 
 #define GIM_SIZE 128uLL * 1024 * 1024 * 1024
-#define CXL_SHM_SIZE 128LL * 1024 * 1024 * 1024
+#define CXL_SHM_SIZE 120LL * 1024 * 1024 * 1024
 #define GIM_LATENCY 300
 #define CACHE_LINE_SIZE 64
 #define SNC 1
